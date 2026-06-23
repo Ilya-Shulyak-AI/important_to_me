@@ -2,6 +2,11 @@ import JSZip from 'jszip';
 import { db } from '../../database/db';
 import type { Person, Event, Group, SavedFilter, WidgetConfig } from '../../models/types';
 
+const APP_VERSION = '0.1.0';
+const SCHEMA_VERSION = 2;
+const MAX_BACKUP_BYTES = 100 * 1024 * 1024;
+const MAX_RECORDS_PER_COLLECTION = 50_000;
+
 export interface BackupMetadata {
   appVersion: string;
   schemaVersion: number;
@@ -13,8 +18,8 @@ export interface BackupMetadata {
 }
 
 export interface BackupData {
-  people: Array<Omit<Person, 'profilePhoto'>>;
-  events: Array<Omit<Event, 'photo'>>;
+  people: Array<Omit<Person, 'profilePhoto' | 'profilePhotoUrl'>>;
+  events: Array<Omit<Event, 'photo' | 'photoUrl'>>;
   groups: Group[];
   savedFilters: SavedFilter[];
   widgets: WidgetConfig[];
@@ -23,152 +28,238 @@ export interface BackupData {
 export interface ImportPreview {
   metadata: BackupMetadata;
   data: BackupData;
-  photos: { [id: string]: Blob };
+  personPhotos: Record<string, Blob>;
+  eventPhotos: Record<string, Blob>;
   duplicates: {
-    people: Array<{ incoming: any; existing: any }>;
-    events: Array<{ incoming: any; existing: any }>;
+    people: Array<{ incoming: Person; existing: Person }>;
+    events: Array<{ incoming: Event; existing: Event }>;
   };
 }
 
-// Generate an elegant, portable backup file
-export async function exportBackup(includePhotos: boolean = true): Promise<Blob> {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function requireArray(value: unknown, field: string): unknown[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`Invalid backup: ${field} must be an array.`);
+  }
+  if (value.length > MAX_RECORDS_PER_COLLECTION) {
+    throw new Error(`Invalid backup: ${field} contains too many records.`);
+  }
+  return value;
+}
+
+function requireString(value: unknown, field: string): string {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(`Invalid backup: ${field} must be a non-empty string.`);
+  }
+  return value;
+}
+
+function validateBackupData(value: unknown): BackupData {
+  if (!isRecord(value)) {
+    throw new Error('Invalid backup: data.json must contain an object.');
+  }
+
+  const people = requireArray(value.people, 'people');
+  const events = requireArray(value.events, 'events');
+  const groups = requireArray(value.groups ?? [], 'groups');
+  const savedFilters = requireArray(value.savedFilters ?? [], 'savedFilters');
+  const widgets = requireArray(value.widgets ?? [], 'widgets');
+
+  const seenPersonIds = new Set<string>();
+  for (const person of people) {
+    if (!isRecord(person)) throw new Error('Invalid backup: malformed person record.');
+    const id = requireString(person.id, 'person.id');
+    requireString(person.displayName, `person ${id}.displayName`);
+    requireString(person.dob, `person ${id}.dob`);
+    if (seenPersonIds.has(id)) throw new Error(`Invalid backup: duplicate person ID ${id}.`);
+    seenPersonIds.add(id);
+  }
+
+  const seenEventIds = new Set<string>();
+  for (const event of events) {
+    if (!isRecord(event)) throw new Error('Invalid backup: malformed event record.');
+    const id = requireString(event.id, 'event.id');
+    requireString(event.eventName, `event ${id}.eventName`);
+    requireString(event.originalDate, `event ${id}.originalDate`);
+    if (seenEventIds.has(id)) throw new Error(`Invalid backup: duplicate event ID ${id}.`);
+    seenEventIds.add(id);
+  }
+
+  return {
+    people: people as BackupData['people'],
+    events: events as BackupData['events'],
+    groups: groups as Group[],
+    savedFilters: savedFilters as SavedFilter[],
+    widgets: widgets as WidgetConfig[],
+  };
+}
+
+async function sha256(text: string): Promise<string> {
+  if (!globalThis.crypto?.subtle) return '';
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function validateMetadata(value: unknown): BackupMetadata {
+  if (!isRecord(value)) throw new Error('Invalid backup: malformed manifest.');
+
+  const schemaVersion = Number(value.schemaVersion);
+  if (!Number.isInteger(schemaVersion) || schemaVersion < 1 || schemaVersion > SCHEMA_VERSION) {
+    throw new Error(`Unsupported backup schema version: ${String(value.schemaVersion)}.`);
+  }
+
+  const timestamp = requireString(value.timestamp, 'manifest.timestamp');
+  if (Number.isNaN(Date.parse(timestamp))) throw new Error('Invalid backup: malformed timestamp.');
+
+  return {
+    appVersion: typeof value.appVersion === 'string' ? value.appVersion : 'unknown',
+    schemaVersion,
+    timestamp,
+    peopleCount: Number(value.peopleCount) || 0,
+    eventCount: Number(value.eventCount) || 0,
+    photoCount: Number(value.photoCount) || 0,
+    integrityHash: typeof value.integrityHash === 'string' ? value.integrityHash : '',
+  };
+}
+
+export async function exportBackup(includePhotos = true): Promise<Blob> {
   const zip = new JSZip();
 
-  // 1. Gather database state
-  const people = await db.people.toArray();
-  const events = await db.events.toArray();
-  const groups = await db.groups.toArray();
-  const savedFilters = await db.savedFilters.toArray();
-  const widgets = await db.widgets.toArray();
+  const people: Person[] = await db.people.toArray();
+  const events: Event[] = await db.events.toArray();
+  const groups: Group[] = await db.groups.toArray();
+  const savedFilters: SavedFilter[] = await db.savedFilters.toArray();
+  const widgets: WidgetConfig[] = await db.widgets.toArray();
 
-  // Create clean data representations without inline Blobs
   const backupPeople = people.map(({ profilePhoto, profilePhotoUrl, ...rest }) => rest);
   const backupEvents = events.map(({ photo, photoUrl, ...rest }) => rest);
+  const backupData: BackupData = { people: backupPeople, events: backupEvents, groups, savedFilters, widgets };
+  const dataText = JSON.stringify(backupData);
 
-  const backupData: BackupData = {
-    people: backupPeople,
-    events: backupEvents,
-    groups,
-    savedFilters,
-    widgets,
-  };
-
-  // 2. Separate all photo Blobs into photos/ directory
   let photoCount = 0;
   if (includePhotos) {
-    const photosFolder = zip.folder('photos');
     for (const person of people) {
       if (person.profilePhoto instanceof Blob) {
-        photosFolder?.file(`${person.id}.jpg`, person.profilePhoto);
-        photoCount++;
+        zip.file(`photos/people/${encodeURIComponent(person.id)}`, person.profilePhoto);
+        photoCount += 1;
+      }
+    }
+    for (const event of events) {
+      if (event.photo instanceof Blob) {
+        zip.file(`photos/events/${encodeURIComponent(event.id)}`, event.photo);
+        photoCount += 1;
       }
     }
   }
 
-  // 3. Create manifest
   const metadata: BackupMetadata = {
-    appVersion: '1.0.0',
-    schemaVersion: 1,
+    appVersion: APP_VERSION,
+    schemaVersion: SCHEMA_VERSION,
     timestamp: new Date().toISOString(),
     peopleCount: backupPeople.length,
     eventCount: backupEvents.length,
     photoCount,
-    integrityHash: btoa(JSON.stringify({
-      p: backupPeople.length,
-      e: backupEvents.length,
-      t: Date.now()
-    })),
+    integrityHash: await sha256(dataText),
   };
 
   zip.file('manifest.json', JSON.stringify(metadata, null, 2));
-  zip.file('data.json', JSON.stringify(backupData, null, 2));
-
-  // 4. Build blob zip package
-  return await zip.generateAsync({ type: 'blob' });
+  zip.file('data.json', dataText);
+  return zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
 }
 
-// Validate and parse an incoming backup file
 export async function parseAndPreviewBackup(file: File): Promise<ImportPreview> {
-  const loadedZip = await JSZip.loadAsync(file);
+  if (file.size <= 0) throw new Error('The selected backup file is empty.');
+  if (file.size > MAX_BACKUP_BYTES) throw new Error('The selected backup exceeds the 100 MB safety limit.');
+
+  let loadedZip: JSZip;
+  try {
+    loadedZip = await JSZip.loadAsync(file, { checkCRC32: true });
+  } catch {
+    throw new Error('The selected file is not a valid or intact backup package.');
+  }
 
   const manifestFile = loadedZip.file('manifest.json');
   const dataFile = loadedZip.file('data.json');
-
   if (!manifestFile || !dataFile) {
-    throw new Error('Invalid backup file: manifest.json or data.json is missing.');
+    throw new Error('Invalid backup: manifest.json or data.json is missing.');
   }
 
-  const manifestText = await manifestFile.async('text');
-  const dataText = await dataFile.async('text');
-
-  const metadata = JSON.parse(manifestText) as BackupMetadata;
-  const data = JSON.parse(dataText) as BackupData;
-
-  // Basic validation check
-  if (!Array.isArray(data.people) || !Array.isArray(data.events)) {
-    throw new Error('Unsupported JSON database formats.');
+  let metadataRaw: unknown;
+  let dataRaw: unknown;
+  let dataText: string;
+  try {
+    const manifestText = await manifestFile.async('text');
+    dataText = await dataFile.async('text');
+    metadataRaw = JSON.parse(manifestText);
+    dataRaw = JSON.parse(dataText);
+  } catch {
+    throw new Error('Invalid backup: manifest or data JSON could not be parsed.');
   }
 
-  // Extract photos
-  const photos: { [id: string]: Blob } = {};
-  const photosFolder = loadedZip.folder('photos');
-  
-  if (photosFolder) {
-    for (const person of data.people) {
-      const photoFile = loadedZip.file(`photos/${person.id}.jpg`);
-      if (photoFile) {
-        const pBlob = await photoFile.async('blob');
-        photos[person.id] = pBlob;
-      }
+  const metadata = validateMetadata(metadataRaw);
+  const data = validateBackupData(dataRaw);
+
+  if (metadata.peopleCount !== data.people.length || metadata.eventCount !== data.events.length) {
+    throw new Error('Invalid backup: manifest record counts do not match the data.');
+  }
+
+  if (metadata.integrityHash) {
+    const calculatedHash = await sha256(dataText);
+    if (calculatedHash && calculatedHash !== metadata.integrityHash) {
+      throw new Error('Backup integrity validation failed. The file may be damaged or modified.');
     }
   }
 
-  // Detect duplicates on matching database keys or names
-  const duplicates = {
-    people: [] as Array<{ incoming: any; existing: any }>,
-    events: [] as Array<{ incoming: any; existing: any }>,
-  };
+  const personPhotos: Record<string, Blob> = {};
+  const eventPhotos: Record<string, Blob> = {};
 
-  for (const incomingP of data.people) {
-    const existingP = await db.people.get(incomingP.id);
-    if (existingP) {
-      duplicates.people.push({ incoming: incomingP, existing: existingP });
-    } else {
-      // Find matching display name + birthday matches
-      const fuzzyMatch = await db.people
-        .where('displayName')
-        .equals(incomingP.displayName)
-        .filter(p => p.dob === incomingP.dob)
-        .first();
-      if (fuzzyMatch) {
-        duplicates.people.push({ incoming: incomingP, existing: fuzzyMatch });
-      }
-    }
+  for (const person of data.people) {
+    const encodedId = encodeURIComponent(person.id);
+    const photoFile = loadedZip.file(`photos/people/${encodedId}`) ?? loadedZip.file(`photos/${person.id}.jpg`);
+    if (photoFile) personPhotos[person.id] = await photoFile.async('blob');
   }
 
-  for (const incomingE of data.events) {
-    const existingE = await db.events.get(incomingE.id);
-    if (existingE) {
-      duplicates.events.push({ incoming: incomingE, existing: existingE });
-    }
+  for (const event of data.events) {
+    const photoFile = loadedZip.file(`photos/events/${encodeURIComponent(event.id)}`);
+    if (photoFile) eventPhotos[event.id] = await photoFile.async('blob');
   }
 
-  return {
-    metadata,
-    data,
-    photos,
-    duplicates,
-  };
+  const duplicates: ImportPreview['duplicates'] = { people: [], events: [] };
+
+  for (const incoming of data.people) {
+    const incomingPerson = incoming as Person;
+    const existingById = await db.people.get(incomingPerson.id);
+    if (existingById) {
+      duplicates.people.push({ incoming: incomingPerson, existing: existingById });
+      continue;
+    }
+
+    const matchingName = await db.people
+      .where('displayName')
+      .equals(incomingPerson.displayName)
+      .filter((person: Person) => person.dob === incomingPerson.dob)
+      .first();
+    if (matchingName) duplicates.people.push({ incoming: incomingPerson, existing: matchingName });
+  }
+
+  for (const incoming of data.events) {
+    const incomingEvent = incoming as Event;
+    const existing = await db.events.get(incomingEvent.id);
+    if (existing) duplicates.events.push({ incoming: incomingEvent, existing });
+  }
+
+  return { metadata, data, personPhotos, eventPhotos, duplicates };
 }
 
-// Write the backup data into IndexDB
 export async function executeImport(
   preview: ImportPreview,
   mode: 'replace' | 'merge',
-  selectedConflictResolutions: { [id: string]: 'use-incoming' | 'keep-existing' } = {}
+  selectedConflictResolutions: Record<string, 'use-incoming' | 'keep-existing'> = {},
 ): Promise<{ peopleSaved: number; eventsSaved: number }> {
-  const { data, photos } = preview;
-
+  const { data, personPhotos, eventPhotos } = preview;
   let peopleSaved = 0;
   let eventsSaved = 0;
 
@@ -181,69 +272,34 @@ export async function executeImport(
       await db.widgets.clear();
     }
 
-    // Process groups
-    for (const group of data.groups || []) {
-      await db.groups.put(group);
-    }
+    for (const group of data.groups) await db.groups.put(group);
+    for (const filter of data.savedFilters) await db.savedFilters.put(filter);
+    for (const widget of data.widgets) await db.widgets.put(widget);
 
-    // Process saved filters
-    for (const filter of data.savedFilters || []) {
-      await db.savedFilters.put(filter);
-    }
-
-    // Process widgets
-    for (const widget of data.widgets || []) {
-      await db.widgets.put(widget);
-    }
-
-    // Process People
     for (const person of data.people) {
       const existing = await db.people.get(person.id);
-      
-      let chooseIncoming = true;
-      if (existing) {
-        if (mode === 'merge') {
-          const resolution = selectedConflictResolutions[person.id];
-          if (resolution === 'keep-existing') {
-            chooseIncoming = false;
-          }
-        }
-      }
+      if (existing && mode === 'merge' && selectedConflictResolutions[person.id] === 'keep-existing') continue;
 
-      if (chooseIncoming) {
-        const fullPerson: Person = {
-          ...person,
-          // Re-attach photo blob if extracted
-          profilePhoto: photos[person.id] || undefined,
-          createdDate: person.createdDate || Date.now(),
-          lastUpdatedDate: Date.now(),
-        };
-        await db.people.put(fullPerson);
-        peopleSaved++;
-      }
+      await db.people.put({
+        ...person,
+        profilePhoto: personPhotos[person.id],
+        createdDate: person.createdDate || Date.now(),
+        lastUpdatedDate: Date.now(),
+      } as Person);
+      peopleSaved += 1;
     }
 
-    // Process Events
     for (const event of data.events) {
       const existing = await db.events.get(event.id);
+      if (existing && mode === 'merge' && selectedConflictResolutions[event.id] === 'keep-existing') continue;
 
-      let chooseIncoming = true;
-      if (existing && mode === 'merge') {
-        const resolution = selectedConflictResolutions[event.id];
-        if (resolution === 'keep-existing') {
-          chooseIncoming = false;
-        }
-      }
-
-      if (chooseIncoming) {
-        const fullEvent: Event = {
-          ...event,
-          createdDate: event.createdDate || Date.now(),
-          lastUpdatedDate: Date.now(),
-        };
-        await db.events.put(fullEvent);
-        eventsSaved++;
-      }
+      await db.events.put({
+        ...event,
+        photo: eventPhotos[event.id],
+        createdDate: event.createdDate || Date.now(),
+        lastUpdatedDate: Date.now(),
+      } as Event);
+      eventsSaved += 1;
     }
   });
 
