@@ -6,6 +6,7 @@ import {
 import { calculateExactAge, calculateNextAnniversary, formatDateLabel } from '../date-engine/engine';
 import { getBlobUrl } from '../database/db';
 import PhotoCropper from './PhotoCropper';
+import CreatableCombobox, { uniqueCaseInsensitive } from './ui/CreatableCombobox';
 import type { Person, Group, CustomField } from '../models/types';
 
 interface PeopleViewProps {
@@ -94,11 +95,14 @@ export default function PeopleView({
 
   // Define preset & gathered relationships
   const defaultRelationships = [
-    'Daughter', 'Son', 'Mother', 'Father', 'Spouse', 'Sibling',
-    'Best Friend', 'Friend', 'Partner', 'Coworker', 'Relative', 'Client', 'Manager'
+    'Spouse', 'Son', 'Daughter', 'Father', 'Mother', 'Brother', 'Sister',
+    'Grandfather', 'Grandmother', 'Grandson', 'Granddaughter', 'Friend',
+    'Best Friend', 'Coworker', 'Client', 'Pastor', 'Relative', 'Other'
   ];
   const dbRelationships = Array.from(new Set(people.map(p => p.relationship).filter(Boolean))) as string[];
-  const allRelationshipSuggestions = Array.from(new Set([...defaultRelationships, ...dbRelationships])).sort();
+  const allRelationshipSuggestions = uniqueCaseInsensitive([...defaultRelationships, ...dbRelationships]);
+  const allLocations = uniqueCaseInsensitive(people.map(p => p.birthLocation || ''));
+  const allFieldLabels = uniqueCaseInsensitive([...people.flatMap(p => (p.customFields || []).map(f => f.label)), 'Phone Number', 'Email Address', 'Home Address', 'Height', 'Weight', 'Eye Color', 'Hair Color', 'Occupation', 'Education', 'Allergies', 'Favorite Food', 'Hobbies']);
 
   // Reset/populate form
   const openAddForm = () => {
@@ -180,7 +184,7 @@ export default function PeopleView({
 
   const handleAddTag = () => {
     const trimmed = newTagInput.trim();
-    if (trimmed && !selectedTags.includes(trimmed)) {
+    if (trimmed && !selectedTags.some(t => t.toLowerCase() === trimmed.toLowerCase())) {
       setSelectedTags(prev => [...prev, trimmed]);
       setNewTagInput('');
     }
@@ -207,7 +211,7 @@ export default function PeopleView({
 
     const actualRelationship = relationshipOption === 'custom'
       ? customRelationship.trim()
-      : relationshipOption;
+      : relationshipOption.trim();
 
     const personPayload = {
       id: editingPerson ? editingPerson.id : `p-${Date.now()}`,
@@ -271,7 +275,7 @@ export default function PeopleView({
   const filtered = processedPeople.filter(({ person }) => {
     const q = searchQuery.toLowerCase();
     const nameStr = `${person.firstName} ${person.lastName} ${person.displayName}`.toLowerCase();
-    const matchesSearch = nameStr.includes(q) || person.notes?.toLowerCase().includes(q);
+    const matchesSearch = nameStr.includes(q) || (person.relationship || '').toLowerCase().includes(q) || (person.tags || []).join(' ').toLowerCase().includes(q) || person.notes?.toLowerCase().includes(q);
 
     const matchesGroup = selectedGroup === 'all' || person.groups.includes(selectedGroup);
     const matchesTag = selectedTag === 'all' || person.tags.includes(selectedTag);
@@ -399,6 +403,7 @@ export default function PeopleView({
       </div>
 
       {/* Directory Grid/List Elements */}
+      {(searchQuery || selectedGroup !== 'all' || selectedTag !== 'all') && <div className="flex flex-wrap gap-2"><button onClick={() => { setSearchQuery(''); setSelectedGroup('all'); setSelectedTag('all'); }} className="rounded-xl border border-[#E5E0D8] bg-white px-3 py-1.5 text-xs font-bold text-[#5A5A40]">Clear filters</button></div>}
       {filtered.length === 0 ? (
         <div className="bg-white border border-[#E5E0D8] rounded-[24px] p-12 text-center text-[#7A7A7A] max-w-lg mx-auto space-y-3 shadow-sm">
           <Info className="w-12 h-12 text-[#5A5A40] opacity-60 mx-auto" />
@@ -678,8 +683,9 @@ export default function PeopleView({
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Birth Date *</label>
                   <input
-                    type="date"
+                    type={dobPrecision === 'full' ? 'date' : 'text'}
                     required
+                    placeholder={dobPrecision === 'month-day' ? 'MM-DD' : 'YYYY-MM-DD'}
                     value={dob}
                     onChange={(e) => setDob(e.target.value)}
                     className="w-full bg-white border border-[#E5E0D8] rounded-xl px-3 py-2 text-sm text-[#2D2D2D] focus:outline-none focus:ring-1 focus:ring-[#5A5A40] shadow-sm"
@@ -710,19 +716,7 @@ export default function PeopleView({
 
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Birth Location (Optional)</label>
-                  <input
-                    type="text"
-                    list="birth-locations"
-                    placeholder="e.g. London, UK"
-                    value={birthLocation}
-                    onChange={(e) => setBirthLocation(e.target.value)}
-                    className="w-full bg-white border border-[#E5E0D8] rounded-xl px-3 py-2 text-sm text-[#2D2D2D] focus:outline-none focus:ring-1 focus:ring-[#5A5A40] shadow-sm"
-                  />
-                  <datalist id="birth-locations">
-                    {Array.from(new Set(people.map(p => p.birthLocation).filter(Boolean))).sort().map(loc => (
-                      <option key={loc} value={loc} />
-                    ))}
-                  </datalist>
+                  <CreatableCombobox label="" value={birthLocation} onChange={setBirthLocation} options={allLocations} placeholder="e.g. London, UK" />
                 </div>
               </div>
 
@@ -730,27 +724,7 @@ export default function PeopleView({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A]">Relationship / Role</label>
-                  <select
-                    value={relationshipOption}
-                    onChange={(e) => setRelationshipOption(e.target.value)}
-                    className="w-full bg-white border border-[#E5E0D8] rounded-xl px-3 py-2 text-sm text-[#2D2D2D] focus:outline-none focus:ring-1 focus:ring-[#5A5A40] shadow-sm"
-                  >
-                    <option value="">-- Choose Relationship --</option>
-                    {allRelationshipSuggestions.map(rel => (
-                      <option key={rel} value={rel}>{rel}</option>
-                    ))}
-                    <option value="custom">✍️ Type Custom Relation...</option>
-                  </select>
-
-                  {relationshipOption === 'custom' && (
-                    <input
-                      type="text"
-                      placeholder="Type custom relationship role"
-                      value={customRelationship}
-                      onChange={(e) => setCustomRelationship(e.target.value)}
-                      className="w-full bg-white border border-[#E5E0D8] rounded-xl px-3 py-2 text-xs text-[#2D2D2D] focus:outline-none mt-1 shadow-sm font-medium"
-                    />
-                  )}
+                  <CreatableCombobox label="" value={relationshipOption === 'custom' ? customRelationship : relationshipOption} onChange={(value) => { setRelationshipOption(value); setCustomRelationship(''); }} options={allRelationshipSuggestions} placeholder="Choose or type a relationship" />
                 </div>
 
                 <div>
@@ -914,28 +888,7 @@ export default function PeopleView({
                 </div>
 
                 <div className="flex gap-2">
-                  <input
-                    type="text"
-                    list="preset-field-names"
-                    placeholder="Field Name (e.g. Clothing Size)"
-                    value={newFieldLabel}
-                    onChange={(e) => setNewFieldLabel(e.target.value)}
-                    className="flex-1 bg-white border border-[#E5E0D8] rounded-xl px-2.5 py-1.5 text-xs text-[#2D2D2D] focus:outline-none focus:ring-1 focus:ring-[#5A5A40] shadow-sm"
-                  />
-                  <datalist id="preset-field-names">
-                    <option value="Phone Number" />
-                    <option value="Email Address" />
-                    <option value="Home Address" />
-                    <option value="Height" />
-                    <option value="Weight" />
-                    <option value="Eye Color" />
-                    <option value="Hair Color" />
-                    <option value="Occupation" />
-                    <option value="Education" />
-                    <option value="Allergies" />
-                    <option value="Favorite Food" />
-                    <option value="Hobbies" />
-                  </datalist>
+                  <div className="flex-1"><CreatableCombobox label="" value={newFieldLabel} onChange={setNewFieldLabel} options={allFieldLabels} placeholder="Field Name (e.g. Clothing Size)" /></div>
                   <input
                     type="text"
                     placeholder="Property Details (e.g. M / 9)"

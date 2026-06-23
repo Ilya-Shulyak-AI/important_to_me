@@ -1,0 +1,12 @@
+{
+  "name": "Important to Me",
+  "short_name": "Important to Me",
+  "description": "A local-first tracker for important people, birthdays, and life events.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F5F2ED",
+  "theme_color": "#5A5A40",
+  "icons": [
+    { "src": "/assets/important-to-me-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

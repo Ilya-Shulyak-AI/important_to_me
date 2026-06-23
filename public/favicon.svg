@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Important to Me icon">
+  <rect width="256" height="256" rx="56" fill="#F4EFE5"/>
+  <path d="M78 78c0-14 11-25 25-25s25 11 25 25c0 14-11 25-25 25S78 92 78 78Z" fill="#43513F"/>
+  <path d="M128 78c0-14 11-25 25-25s25 11 25 25c0 14-11 25-25 25s-25-11-25-25Z" fill="#776A55"/>
+  <path d="M72 132c0-19 15-34 34-34h44c19 0 34 15 34 34v8c0 8-6 14-14 14H86c-8 0-14-6-14-14v-8Z" fill="#D8C7A6"/>
+  <path d="M128 54v148" stroke="#2F332C" stroke-width="10" stroke-linecap="round" opacity=".92"/>
+  <path d="M78 184h100" stroke="#A67C52" stroke-width="12" stroke-linecap="round"/>
+  <path d="M181 61l5 12 13 1-10 8 3 13-11-7-11 7 3-13-10-8 13-1 5-12Z" fill="#8C6A2F"/>
+</svg>

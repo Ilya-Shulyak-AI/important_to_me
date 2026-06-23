@@ -1,0 +1,10 @@
+export const APP_NAME = 'Important to Me';
+export const CANONICAL_APP_URL = 'https://ai.studio/apps/c3dda66e-fc84-4a5f-8ccd-33292b78197b';
+export const SCRIPTABLE_APP_STORE_URL = 'https://apps.apple.com/us/app/scriptable/id1405459188';
+export const SCRIPTABLE_DOCS_URL = 'https://docs.scriptable.app/';
+export const SCRIPTABLE_WIDGET_DOCS_URL = 'https://docs.scriptable.app/listwidget/';
+export const SCRIPTABLE_FILEMANAGER_DOCS_URL = 'https://docs.scriptable.app/filemanager/';
+export const SCRIPTABLE_DOCUMENTPICKER_DOCS_URL = 'https://docs.scriptable.app/documentpicker/';
+export const SCRIPTABLE_ARGS_DOCS_URL = 'https://docs.scriptable.app/args/';
+export const SCRIPTABLE_SCRIPT_FILENAME = 'important-to-me-widget.js';
+export const SCRIPTABLE_DATA_FILENAME = 'important-to-me-widget-data.json';
