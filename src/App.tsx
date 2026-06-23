@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Heart, Calendar, Users, Smartphone, Database, ShieldCheck, 
+import {
+  Heart, Calendar, Users, Smartphone, Database, ShieldCheck,
   Terminal, Settings, ChevronRight, X, Plus, Trash2, HeartPulse, Shield, Star, Loader2
 } from 'lucide-react';
 import { db } from './database/db';
@@ -18,7 +18,7 @@ import BackupView from './components/BackupView';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'people' | 'events' | 'widgets' | 'backups' | 'settings'>('dashboard');
-  
+
   // Database data states
   const [people, setPeople] = useState<Person[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
@@ -27,6 +27,7 @@ export default function App() {
 
   // Profile detail overlay navigator state
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
+  const [editPersonId, setEditPersonId] = useState<string | null>(null);
 
   // Group creation helper
   const [newGroupName, setNewGroupName] = useState('');
@@ -147,31 +148,31 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F5F2ED] text-[#2D2D2D] flex flex-col md:flex-row antialiased font-sans">
-      
+
       {/* Sidebar Navigation - Desktop */}
       <aside className="hidden md:flex md:flex-col md:w-64 bg-white border-r border-[#E5E0D8] p-6 space-y-8 justify-between shrink-0">
         <div className="space-y-6">
           <div className="flex items-center gap-3">
-            <img 
-              src="/src/assets/images/app_icon_filling_frame_1782217863679.jpg" 
-              alt="Important Dates Logo" 
+            <img
+              src="/src/assets/images/app_icon_filling_frame_1782217863679.jpg"
+              alt="Important to Me logo"
               className="w-11 h-11 rounded-2xl object-cover shadow-sm border border-[#E5E0D8]/60"
               referrerPolicy="no-referrer"
             />
             <div>
-              <h1 className="text-lg font-serif font-bold italic text-[#5A5A40] tracking-tight leading-none">Important Dates</h1>
-              <p className="text-[9px] uppercase font-bold text-[#8C8C8C] mt-1 tracking-widest">Local-First Storage</p>
+              <h1 className="text-lg font-serif font-bold italic text-[#5A5A40] tracking-tight leading-none">Important to Me</h1>
+              <p className="text-[9px] uppercase font-bold text-[#8C8C8C] mt-1 tracking-widest">Local-First</p>
             </div>
           </div>
 
           <nav className="space-y-1" aria-label="Desktop Main Navigation">
             {([
               { id: 'dashboard', label: 'Dashboard', icon: Heart },
-              { id: 'people', label: 'People Registry', icon: Users },
-              { id: 'events', label: 'Events Tracker', icon: Calendar },
+              { id: 'people', label: 'People', icon: Users },
+              { id: 'events', label: 'Events', icon: Calendar },
               { id: 'widgets', label: 'Widget Center', icon: Smartphone },
-              { id: 'backups', label: 'Security & Backup', icon: Database },
-              { id: 'settings', label: 'Utilities', icon: Settings }
+              { id: 'backups', label: 'Backups', icon: Database },
+              { id: 'settings', label: 'Settings', icon: Settings }
             ] as const).map(tab => {
               const Icon = tab.icon;
               const isSelected = activeTab === tab.id && !selectedPersonId;
@@ -200,7 +201,7 @@ export default function App() {
         <div className="p-4 bg-[#F5F2ED]/60 rounded-2xl border border-[#E5E0D8] flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-[#5A5A40] shrink-0" />
           <div className="text-[10px] text-[#7A7A7A] font-medium leading-tight">
-            100% Secure & offline. Encryption active.
+            Stored locally in this browser. Export backups regularly.
           </div>
         </div>
       </aside>
@@ -213,18 +214,18 @@ export default function App() {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            <p className="text-xs font-semibold">Decrypting local database sandboxes...</p>
+            <p className="text-xs font-semibold">Loading your data...</p>
           </div>
         ) : selectedPersonId ? (
-          <PersonProfileView 
+          <PersonProfileView
             personId={selectedPersonId}
             people={people}
             events={events}
             groups={groups}
             onBack={() => setSelectedPersonId(null)}
             onEdit={(p) => {
+              setEditPersonId(p.id);
               setSelectedPersonId(null);
-              // Simple redirect to list to force edit pop up triggers
               setActiveTab('people');
             }}
             onDelete={handleDeletePerson}
@@ -253,6 +254,8 @@ export default function App() {
                 onUpdatePerson={handleUpdatePerson}
                 onDeletePerson={handleDeletePerson}
                 onNavigateToPerson={(id) => setSelectedPersonId(id)}
+                editPersonId={editPersonId}
+                onEditPersonConsumed={() => setEditPersonId(null)}
               />
             )}
 
@@ -271,14 +274,14 @@ export default function App() {
             )}
 
             {activeTab === 'widgets' && (
-              <WidgetSystemView 
+              <WidgetSystemView
                 people={people}
                 groups={groups}
               />
             )}
 
             {activeTab === 'backups' && (
-              <BackupView 
+              <BackupView
                 onRefreshData={loadDatabaseState}
               />
             )}
@@ -287,18 +290,18 @@ export default function App() {
               <div className="space-y-8 max-w-4xl mx-auto">
                 <div>
                   <h2 className="text-4xl font-serif font-bold italic text-[#5A5A40] tracking-tight flex items-center gap-2">
-                    <Settings className="w-8 h-8 text-[#5A5A40]" /> Utilities console
+                    <Settings className="w-8 h-8 text-[#5A5A40]" /> Settings
                   </h2>
-                  <p className="text-[#7A7A7A] text-sm">Configure database tags, execution logs, and sandbox tests.</p>
+                  <p className="text-[#7A7A7A] text-sm">Manage groups, privacy notes, and diagnostics.</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Group Categories Customization Box */}
                   <div className="bg-white border border-[#E5E0D8] rounded-[24px] p-6 space-y-4 shadow-sm">
                     <h3 className="text-base font-bold text-[#2D2D2D]">Custom Group Categories</h3>
-                    
+
                     <form onSubmit={handleAddGroup} className="flex gap-2">
-                      <input 
+                      <input
                         type="text"
                         required
                         placeholder="Group Name (e.g. My Children)"
@@ -306,14 +309,14 @@ export default function App() {
                         onChange={(e) => setNewGroupName(e.target.value)}
                         className="flex-1 bg-white border border-[#E5E0D8] rounded-xl px-3 py-2 text-xs text-[#2D2D2D] focus:outline-none focus:ring-1 focus:ring-[#5A5A40] placeholder-[#8C8C8C]"
                       />
-                      <input 
+                      <input
                         type="color"
                         value={newGroupColor}
                         onChange={(e) => setNewGroupColor(e.target.value)}
                         className="w-10 h-8 rounded bg-transparent border-0 cursor-pointer"
                         title="Group color"
                       />
-                      <button 
+                      <button
                         type="submit"
                         className="py-1.5 px-3 bg-[#5A5A40] hover:bg-opacity-90 text-white rounded-xl text-xs font-bold shrink-0 cursor-pointer"
                       >
@@ -331,7 +334,7 @@ export default function App() {
                               <span className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: g.color }} />
                               <span className="text-[#2D2D2D] font-semibold">{g.name}</span>
                             </div>
-                            <button 
+                            <button
                               onClick={() => handleDeleteGroup(g.id)}
                               className="text-[#8C6A5D] hover:text-opacity-80 transition-colors cursor-pointer"
                               aria-label={`Delete custom group ${g.name}`}
@@ -347,15 +350,15 @@ export default function App() {
                   {/* Private Cryptography and Privacy Screen */}
                   <div className="bg-white border border-[#E5E0D8] rounded-[24px] p-6 space-y-4 shadow-sm">
                     <h3 className="text-base font-bold text-[#2D2D2D] flex items-center gap-2">
-                      <Shield className="w-5 h-5 text-[#5A5A40]" /> Secure Local-First Trust Promise
+                      <Shield className="w-5 h-5 text-[#5A5A40]" /> Local Data and Privacy
                     </h3>
-                    
+
                     <div className="space-y-3.5 text-xs text-[#7A7A7A] leading-relaxed bg-[#F5F2ED]/40 p-4 rounded-xl border border-[#E5E0D8]">
                       <p>
-                        This application is built as a complete **Local-First sandboxed system**. All data items, including cropped JPEG photos, logged anniversaries, custom fields, notes, and metrics remain encrypted exclusively inside the browser's persistent IndexedDB storage engine.
+                        This app stores people, events, photos, notes, and settings locally in this browser with IndexedDB. The app does not add its own encryption layer.
                       </p>
                       <p>
-                        The application has **zero telemetry, zero analytics tracking, absolutely no paywalls, subscriptions or advertising, and performs no remote network queries**. Your database can only leave your device if you manually compile and export its backup file.
+                        There is no analytics or advertising code in the app. Exported backup files can contain sensitive personal information, so store them carefully.
                       </p>
                     </div>
                   </div>
@@ -368,7 +371,7 @@ export default function App() {
                       <h3 className="text-sm font-bold uppercase tracking-wider text-[#2D2D2D]">Deterministic Diagnostic Suite</h3>
                       <p className="text-xs text-[#7A7A7A]">Run automatic deterministic unit tests over age bounds, year-boundary leap rules, and transactions.</p>
                     </div>
-                    <button 
+                    <button
                       onClick={handleTriggerDiagnostics}
                       disabled={runningDiagnostics}
                       className="py-2 px-4 bg-[#5A5A40] hover:bg-opacity-90 text-white rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1.5"
@@ -381,11 +384,11 @@ export default function App() {
                   {diagnosticResults.length > 0 && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-64 overflow-y-auto pr-1">
                       {diagnosticResults.map((res, i) => (
-                        <div 
+                        <div
                           key={i}
                           className={`p-3 rounded-xl border text-[11px] flex items-start gap-2 ${
-                            res.status === 'passed' 
-                              ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+                            res.status === 'passed'
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
                               : 'bg-[#8C6A5D]/10 border-[#8C6A5D]/20 text-[#8C6A5D]'
                           }`}
                         >
@@ -413,7 +416,7 @@ export default function App() {
           { id: 'events', label: 'Events', icon: Calendar },
           { id: 'widgets', label: 'Widgets', icon: Smartphone },
           { id: 'backups', label: 'Backups', icon: Database },
-          { id: 'settings', label: 'Utilities', icon: Settings }
+          { id: 'settings', label: 'Settings', icon: Settings }
         ] as const).map(tab => {
           const Icon = tab.icon;
           const isSelected = activeTab === tab.id && !selectedPersonId;
@@ -440,13 +443,13 @@ export default function App() {
               Are you sure you want to delete this group category? Associated people profiles will remain fully intact.
             </p>
             <div className="flex gap-2.5 pt-2">
-              <button 
+              <button
                 onClick={() => setGroupToDelete(null)}
                 className="flex-1 py-2 px-4 bg-[#F5F2ED] hover:bg-[#E5E0D8]/40 border border-[#E5E0D8] text-[#5A5A40] text-xs font-bold uppercase rounded-xl transition cursor-pointer"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={confirmDeleteGroup}
                 className="flex-1 py-2 px-4 bg-[#8C6A5D] hover:opacity-95 text-white text-xs font-bold uppercase rounded-xl transition cursor-pointer border-0"
               >
