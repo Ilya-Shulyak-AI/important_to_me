@@ -4,7 +4,6 @@ import {
   Terminal, Settings, ChevronRight, X, Plus, Trash2, HeartPulse, Shield, Star, Loader2
 } from 'lucide-react';
 import { db } from './database/db';
-import { syncWidgetPayloadToCapacitorBridge } from './features/widgets/iosWidgetExporter';
 import { runAllDiagnostics, type TestResult } from './tests/runner';
 import type { Person, Event, Group } from './models/types';
 
@@ -59,13 +58,6 @@ export default function App() {
   useEffect(() => {
     loadDatabaseState();
   }, []);
-
-  // Update native widget payloads whenever data changes
-  useEffect(() => {
-    if (!loading) {
-      syncWidgetPayloadToCapacitorBridge();
-    }
-  }, [people, events, loading]);
 
   // People handlers
   const handleAddPerson = async (newP: Omit<Person, 'createdDate' | 'lastUpdatedDate'>) => {
@@ -154,7 +146,7 @@ export default function App() {
         <div className="space-y-6">
           <div className="flex items-center gap-3">
             <img
-              src="/src/assets/images/app_icon_filling_frame_1782217863679.jpg"
+              src="/assets/important-to-me-icon.svg"
               alt="Important to Me logo"
               className="w-11 h-11 rounded-2xl object-cover shadow-sm border border-[#E5E0D8]/60"
               referrerPolicy="no-referrer"
@@ -170,7 +162,7 @@ export default function App() {
               { id: 'dashboard', label: 'Dashboard', icon: Heart },
               { id: 'people', label: 'People', icon: Users },
               { id: 'events', label: 'Events', icon: Calendar },
-              { id: 'widgets', label: 'Widget Center', icon: Smartphone },
+              { id: 'widgets', label: 'iPhone Widgets', icon: Smartphone },
               { id: 'backups', label: 'Backups', icon: Database },
               { id: 'settings', label: 'Settings', icon: Settings }
             ] as const).map(tab => {
@@ -276,6 +268,7 @@ export default function App() {
             {activeTab === 'widgets' && (
               <WidgetSystemView
                 people={people}
+                events={events}
                 groups={groups}
               />
             )}

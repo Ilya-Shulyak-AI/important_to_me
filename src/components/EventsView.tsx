@@ -6,6 +6,7 @@ import {
 import { calculateNextAnniversary, formatDateLabel, getOriginalDayOfWeek, calculateExactAge } from '../date-engine/engine';
 import type { Person, Event, Group, EventType, CustomField } from '../models/types';
 import PhotoCropper from './PhotoCropper';
+import CreatableCombobox, { uniqueCaseInsensitive } from './ui/CreatableCombobox';
 import { getBlobUrl } from '../database/db';
 
 interface EventsViewProps {
@@ -91,6 +92,14 @@ export default function EventsView({
   const [newFieldLabel, setNewFieldLabel] = useState('');
   const [newFieldValue, setNewFieldValue] = useState('');
   const [tagInput, setTagInput] = useState('');
+  const [linkedPeopleSearch, setLinkedPeopleSearch] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const allEventLocations = uniqueCaseInsensitive([...events.map(e => e.location || ''), ...people.map(p => p.birthLocation || '')]);
+  const allTimezones = uniqueCaseInsensitive([...events.map(e => e.timezone || ''), ...people.map(p => p.birthTimezone || '')]);
+  const allEventFieldLabels = uniqueCaseInsensitive([...events.flatMap(e => (e.customFields || []).map(f => f.label)), 'Ceremony Minister', 'Venue', 'Gift Idea', 'Tradition', 'Keepsake Location']);
+  const allEventTags = uniqueCaseInsensitive(events.flatMap(e => e.tags || []));
+  const searchedLinkedPeople = people.filter(p => `${p.firstName} ${p.middleName || ''} ${p.lastName} ${p.displayName} ${p.relationship || ''} ${(p.tags || []).join(' ')}`.toLowerCase().includes(linkedPeopleSearch.toLowerCase()));
 
   const searchInputId = useId();
   const typeFilterId = useId();
@@ -153,15 +162,16 @@ export default function EventsView({
 
   const handleAddTag = () => {
     const trimmed = tagInput.trim();
-    if (trimmed && !selectedTags.includes(trimmed)) {
+    if (trimmed && !selectedTags.some(t => t.toLowerCase() === trimmed.toLowerCase())) {
       setSelectedTags(prev => [...prev, trimmed]);
       setTagInput('');
     }
   };
 
-  const handleSaveEvent = (e: React.FormEvent) => {
+  const handleSaveEvent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!eventName.trim() || !originalDate) return;
+    if (!eventName.trim() || !originalDate || isSaving) return;
+    setIsSaving(true);
 
     const eventPayload = {
       id: editingEvent ? editingEvent.id : `e-${Date.now()}`,
@@ -185,16 +195,17 @@ export default function EventsView({
     };
 
     if (editingEvent) {
-      onUpdateEvent({
+      await onUpdateEvent({
         ...editingEvent,
         ...eventPayload,
         lastUpdatedDate: Date.now()
       });
     } else {
-      onAddEvent(eventPayload);
+      await onAddEvent(eventPayload);
     }
 
     setIsFormOpen(false);
+    setIsSaving(false);
   };
 
   const handleToggleLinkPerson = (personId: string) => {
@@ -216,7 +227,8 @@ export default function EventsView({
   // Filter list
   const filtered = processedEvents.filter(({ event }) => {
     const q = searchQuery.toLowerCase();
-    const nameMatches = event.eventName.toLowerCase().includes(q) || event.notes?.toLowerCase().includes(q);
+    const linkedNames = event.linkedPeopleIds.map(id => people.find(p => p.id === id)?.displayName || '').join(' ');
+    const nameMatches = event.eventName.toLowerCase().includes(q) || (event.location || '').toLowerCase().includes(q) || (event.tags || []).join(' ').toLowerCase().includes(q) || linkedNames.toLowerCase().includes(q) || event.notes?.toLowerCase().includes(q);
     const matchesType = selectedEventType === 'all' || event.eventType === selectedEventType;
     const matchesPerson = selectedPersonFilter === 'all' || event.linkedPeopleIds.includes(selectedPersonFilter);
     return nameMatches && matchesType && matchesPerson;
@@ -336,6 +348,7 @@ export default function EventsView({
       </div>
 
       {/* Timeline Elements list */}
+      {(searchQuery || selectedEventType !== 'all' || selectedPersonFilter !== 'all') && <div className="flex flex-wrap gap-2"><button onClick={() => { setSearchQuery(''); setSelectedEventType('all'); setSelectedPersonFilter('all'); }} className="rounded-xl border border-[#E5E0D8] bg-white px-3 py-1.5 text-xs font-bold text-[#5A5A40]">Clear filters</button></div>}
       {filtered.length === 0 ? (
         <div className="bg-white border border-[#E5E0D8] rounded-[24px] p-12 text-center text-[#7A7A7A] max-w-lg mx-auto space-y-3 shadow-sm">
           <Info className="w-12 h-12 text-[#8C6A5D] opacity-60 mx-auto" />
@@ -566,7 +579,7 @@ export default function EventsView({
               {/* Event descriptors */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Milestone Title *</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Event Name *</label>
                   <input 
                     type="text" 
                     required
@@ -578,7 +591,7 @@ export default function EventsView({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Milestone Category</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Event Type</label>
                   <select 
                     value={eventType}
                     onChange={(e) => setEventType(e.target.value as EventType)}
@@ -607,14 +620,20 @@ export default function EventsView({
               {/* Dates & Time parameters */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Original History Date *</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Original Date *</label>
                   <input 
-                    type="date" 
+                    type={originalDatePrecision === 'full' ? 'date' : 'text'} 
                     required
+                    placeholder={originalDatePrecision === 'month-day' ? 'MM-DD' : 'YYYY-MM-DD'}
                     value={originalDate}
                     onChange={(e) => setOriginalDate(e.target.value)}
                     className="w-full bg-white border border-[#E5E0D8] rounded-xl px-3 py-2 text-sm text-[#2D2D2D] focus:outline-none focus:ring-1 focus:ring-[#5A5A40]"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Date Precision</label>
+                  <select value={originalDatePrecision} onChange={(e) => setOriginalDatePrecision(e.target.value as any)} className="w-full bg-white border border-[#E5E0D8] rounded-xl px-3 py-2 text-sm text-[#2D2D2D] focus:outline-none focus:ring-1 focus:ring-[#5A5A40]"><option value="full">Full date known</option><option value="month-day">Month and day only</option><option value="year">Year only</option></select>
                 </div>
 
                 <div>
@@ -628,7 +647,7 @@ export default function EventsView({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Priority Urgency Indicator</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Priority</label>
                   <select 
                     value={priority}
                     onChange={(e) => setPriority(e.target.value as any)}
@@ -645,38 +664,28 @@ export default function EventsView({
               {/* Venue details */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Physical Location / Venue Coordinates</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. Sacramento Municipal Cathedral, California"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    className="w-full bg-white border border-[#E5E0D8] rounded-xl px-3 py-2 text-sm text-[#2D2D2D] focus:outline-none focus:ring-1 focus:ring-[#5A5A40]"
-                  />
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Location</label>
+                  <CreatableCombobox label="" value={location} onChange={setLocation} options={allEventLocations} placeholder="e.g. Sacramento Cathedral, California" />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Timezone Name</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. America/Los_Angeles"
-                    value={timezone}
-                    onChange={(e) => setTimezone(e.target.value)}
-                    className="w-full bg-white border border-[#E5E0D8] rounded-xl px-3 py-2 text-sm text-[#2D2D2D] focus:outline-none focus:ring-1 focus:ring-[#5A5A40]"
-                  />
+                  <CreatableCombobox label="" value={timezone} onChange={setTimezone} options={allTimezones} placeholder="e.g. America/Los_Angeles" />
                 </div>
               </div>
 
               {/* Linked People Multi check checkboxes */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-2 flex items-center gap-1">
-                  <UserPlus className="w-3.5 h-3.5 text-[#5A5A40]" /> Link and associate with People *
+                  <UserPlus className="w-3.5 h-3.5 text-[#5A5A40]" /> Link People
                 </label>
                 {people.length === 0 ? (
                   <p className="text-xs text-[#8C8C8C] italic">No bios available. Add people first to associate this milestone with them.</p>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-[#F5F2ED]/40 p-4 rounded-xl border border-[#E5E0D8]">
-                    {people.map(p => (
+                  <>
+                  <input value={linkedPeopleSearch} onChange={e => setLinkedPeopleSearch(e.target.value)} placeholder="Search people to link" className="mb-2 w-full rounded-xl border border-[#E5E0D8] px-3 py-2 text-sm" />
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-[#F5F2ED]/40 p-4 rounded-xl border border-[#E5E0D8] max-h-56 overflow-y-auto">
+                    {searchedLinkedPeople.map(p => (
                       <label key={p.id} className="flex items-center gap-2 cursor-pointer text-xs text-[#2D2D2D] font-bold">
                         <input 
                           type="checkbox"
@@ -688,6 +697,7 @@ export default function EventsView({
                       </label>
                     ))}
                   </div>
+                  </>
                 )}
               </div>
 
@@ -705,17 +715,21 @@ export default function EventsView({
                 />
               </div>
 
+              <div className="space-y-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A]">Tags ({selectedTags.length})</label>
+                <div className="flex gap-2">
+                  <input value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } }} placeholder="Type or choose a tag" className="flex-1 rounded-xl border border-[#E5E0D8] px-3 py-2 text-sm" />
+                  <button type="button" onClick={handleAddTag} className="rounded-xl border border-[#E5E0D8] px-3 py-2 text-xs font-bold text-[#5A5A40]">Add</button>
+                </div>
+                {allEventTags.length > 0 && <select value="" onChange={e => { const val = e.target.value; if (val && !selectedTags.some(t => t.toLowerCase() === val.toLowerCase())) setSelectedTags(prev => [...prev, val]); }} className="w-full rounded-xl border border-[#E5E0D8] px-3 py-2 text-xs"><option value="">Choose existing tag</option>{allEventTags.map(tag => <option key={tag} value={tag}>#{tag}</option>)}</select>}
+                <div className="flex flex-wrap gap-1.5">{selectedTags.map(tag => <span key={tag} className="rounded-lg border border-[#E5E0D8] bg-[#F5F2ED] px-2 py-1 text-[10px] font-bold">#{tag} <button type="button" onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))} aria-label={`Remove tag ${tag}`}>×</button></span>)}</div>
+              </div>
+
               {/* Custom Fields (unlimited) */}
               <div className="space-y-3 border-t border-[#E5E0D8] pt-4">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-[#7A7A7A]">Log unlimited custom variables</h4>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-[#7A7A7A]">Reusable custom fields</h4>
                 <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    placeholder="Field Name (e.g. Ceremony Minister)"
-                    value={newFieldLabel}
-                    onChange={(e) => setNewFieldLabel(e.target.value)}
-                    className="flex-1 bg-white border border-[#E5E0D8] rounded-xl px-2.5 py-1.5 text-xs text-[#2D2D2D] focus:outline-none"
-                  />
+                  <div className="flex-1"><CreatableCombobox label="" value={newFieldLabel} onChange={setNewFieldLabel} options={allEventFieldLabels} placeholder="Field Name (e.g. Ceremony Minister)" /></div>
                   <input 
                     type="text" 
                     placeholder="Details Value..."
@@ -748,7 +762,7 @@ export default function EventsView({
 
               {/* Notes */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5 font-bold">Personal Notes / Incident details</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5 font-bold">Notes</label>
                 <textarea 
                   rows={3}
                   value={notes}
@@ -769,9 +783,10 @@ export default function EventsView({
                 </button>
                 <button 
                   type="submit"
-                  className="flex-1 py-2.5 px-4 bg-[#5A5A40] text-white text-sm font-semibold rounded-xl cursor-pointer hover:bg-opacity-95 text-center"
+                  disabled={isSaving}
+                  className="flex-1 py-2.5 px-4 bg-[#5A5A40] text-white text-sm font-semibold rounded-xl cursor-pointer hover:bg-opacity-95 text-center disabled:opacity-60"
                 >
-                  Save Log entry
+                  {isSaving ? 'Saving…' : 'Save Event'}
                 </button>
               </div>
             </form>

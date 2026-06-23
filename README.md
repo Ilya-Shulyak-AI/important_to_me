@@ -1,25 +1,21 @@
 # Important to Me
 
-A local-first important dates and people tracker.
+[Open Important to Me](https://ai.studio/apps/c3dda66e-fc84-4a5f-8ccd-33292b78197b)
 
-## Overview
+Important to Me is a local-first browser app for remembering important people, birthdays, anniversaries, milestones, groups, notes, and backups.
 
-Important to Me helps you keep track of important people and life events in one private browser-based app. It supports birthdays, anniversaries, weddings, baptisms, graduations, adoptions, deaths, engagements, first meetings, job starts, moves, and custom events. You can store notes, groups, tags, custom fields, profile photos, event photos, exact elapsed time, upcoming anniversaries, countdowns, and local backup files.
+## Features
 
-## Key Features
+- People profiles with names, dates, relationships, groups, tags, custom fields, favorites, notes, and optional cropped profile photos.
+- Event tracking for recurring and one-time milestones with linked people, location, tags, groups, priority, notes, and optional photos.
+- Dashboard summaries for upcoming birthdays and events.
+- Search, filtering, reusable dropdown suggestions, and clear filter controls for larger lists.
+- Local backup and restore with full backups, lightweight backups, preview, merge/replace import, duplicate handling, and compatibility with older photo backup paths.
+- iPhone Home Screen widgets through Scriptable without accounts, an app server, Xcode, or an Apple developer account.
 
-- People profiles with names, birth dates, optional birth details, relationships, notes, groups, tags, custom fields, favorites, and cropped profile photos.
-- Event tracking for recurring and one-time life events with linked people, photos, notes, groups, tags, priorities, and custom fields.
-- Dashboard summaries for upcoming dates, favorites, and countdowns.
-- Local backup and restore with full backups that include photos and lightweight backups without photos.
-- Backup preview, merge or replace import modes, duplicate handling, and integrity validation.
-- Widget payload export helpers for projects that wrap the app with native iOS WidgetKit integration.
+## Local-First Storage
 
-## Privacy and Data Storage
-
-Important to Me stores application data locally in this browser using IndexedDB. The app does not automatically sync data between devices. Clearing browser data, switching browsers, or browser storage eviction can delete local records.
-
-Export regular backups and store them somewhere safe. Backup files can contain sensitive personal information, including names, dates, notes, custom fields, and photos. Local browser storage is not the same as application-level encryption, and backup integrity validation is not encryption. Backups are not encrypted by this app.
+Important to Me stores application data locally in this browser using IndexedDB. It does not add accounts, subscriptions, advertising, analytics, a cloud database, or an unnecessary backend. Data does not automatically sync between devices. Clearing browser data, switching browsers, or browser storage eviction can delete local records.
 
 ## Backup and Restore
 
@@ -29,7 +25,26 @@ Export regular backups and store them somewhere safe. Backup files can contain s
 - **Replace import** clears current local records before importing the backup.
 - Older person-photo backup paths are still recognized for compatibility.
 
-Store exported backups in a secure location you control, especially if they contain photos or private notes.
+Store exported backups somewhere safe. Backup files can contain sensitive names, dates, notes, custom fields, and photos. Backups are not encrypted by this app.
+
+## iPhone Widgets
+
+Important to Me can display upcoming birthdays and events on your iPhone Home Screen through the free Scriptable app.
+
+1. Install Scriptable from the [App Store](https://apps.apple.com/us/app/scriptable/id1405459188).
+2. Open Important to Me and go to **iPhone Widgets**.
+3. Tap **Copy Widget Script** and paste it into Scriptable.
+4. Choose what the widget should show, then tap **Copy Widget Data**.
+5. Run the Scriptable script and import the data.
+6. Add a Scriptable widget to your Home Screen and select the `Important to Me` script.
+
+See the complete step-by-step guide: [Set Up iPhone Widgets](docs/SCRIPTABLE_WIDGET_SETUP.md).
+
+Widget data is exported manually. The script recalculates countdowns from stored dates, but you need to re-export/import when people, events, groups, or widget preferences change. iOS controls the exact Home Screen widget refresh schedule.
+
+## Widget Privacy
+
+The widget export is created locally and is not uploaded by Important to Me. Scriptable stores imported data locally by default. The export includes names and dates needed for the widget and intentionally excludes notes, photos, custom private fields, and birth locations. Anyone with access to the unlocked phone or exported JSON file may be able to read it; this is not encryption. Delete downloaded widget-data files you no longer need.
 
 ## Technology Stack
 
@@ -62,33 +77,17 @@ Open the local URL printed by Vite, usually `http://localhost:3000`.
 - `npm test` - run automated regression tests.
 - `npm run clean` - remove generated build/server artifacts.
 
-## Production Build
-
-```bash
-npm run build
-```
-
-The generated `dist/` directory can be hosted as static files.
-
 ## Testing
 
 ```bash
 npm test
+npm run lint
+npm run build
 npm run check
+npm audit
 ```
 
-The automated tests cover the repaired profile-photo editing flow, cropper form-safety checks, edit navigation, and backup photo compatibility at the source level.
-
-## Project Structure
-
-- `src/App.tsx` - top-level app state, navigation, settings, and database handlers.
-- `src/components/` - screens and reusable UI components.
-- `src/database/` - Dexie database setup and local storage resilience helpers.
-- `src/features/backup/` - backup export, preview, validation, and import logic.
-- `src/features/widgets/` - optional native widget payload export helpers.
-- `src/date-engine/` - date, age, and anniversary calculations.
-- `src/models/` - shared TypeScript models.
-- `test/` - automated regression tests.
+Automated tests cover backup/photo compatibility, Scriptable widget export privacy and sorting, Scriptable source safety, reusable dropdown behavior, search/filter source behavior, and active branding assets.
 
 ## Known Limitations
 
@@ -96,7 +95,9 @@ The automated tests cover the repaired profile-photo editing flow, cropper form-
 - There is no automatic cloud sync.
 - Clearing browser data may erase records.
 - Image support depends on browser support for JPEG, PNG, and WebP file decoding/canvas export.
-- Native iOS widgets require additional wrapper/native integration; the web app alone cannot install WidgetKit home-screen widgets.
+- iPhone widgets depend on Scriptable and manual data transfer after app changes.
+- iOS may delay widget refreshes.
+- Widget photos are intentionally not exported by default.
 
 ## Origin
 
