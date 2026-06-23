@@ -1,5 +1,5 @@
 import React, { useState, useId, useEffect } from 'react';
-import { 
+import {
   Plus, Search, List, Grid, SlidersHorizontal, Trash2, Heart,
   Tag, Loader2, Calendar, User, AlignLeft, Info, HelpCircle, Edit, Star, X
 } from 'lucide-react';
@@ -11,10 +11,12 @@ import type { Person, Group, CustomField } from '../models/types';
 interface PeopleViewProps {
   people: Person[];
   groups: Group[];
-  onAddPerson: (person: Omit<Person, 'createdDate' | 'lastUpdatedDate'>) => void;
-  onUpdatePerson: (person: Person) => void;
+  onAddPerson: (person: Omit<Person, 'createdDate' | 'lastUpdatedDate'>) => Promise<void>;
+  onUpdatePerson: (person: Person) => Promise<void>;
   onDeletePerson: (id: string) => void;
   onNavigateToPerson: (id: string) => void;
+  editPersonId?: string | null;
+  onEditPersonConsumed?: () => void;
 }
 
 export default function PeopleView({
@@ -23,18 +25,20 @@ export default function PeopleView({
   onAddPerson,
   onUpdatePerson,
   onDeletePerson,
-  onNavigateToPerson
+  onNavigateToPerson,
+  editPersonId,
+  onEditPersonConsumed
 }: PeopleViewProps) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
   const [selectedTag, setSelectedTag] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'name' | 'age' | 'birthday' | 'recently-added'>('name');
-  
+
   // Dialog additions
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingPerson, setEditingPerson] = useState<Person | null>(null);
-  
+
   // Person form states
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
@@ -53,11 +57,11 @@ export default function PeopleView({
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [selectedBloodType, setSelectedBloodType] = useState('');
-  
+
   // Custom field helpers
   const [newFieldLabel, setNewFieldLabel] = useState('');
   const [newFieldValue, setNewFieldValue] = useState('');
-  
+
   // Tag input helpers
   const [newTagInput, setNewTagInput] = useState('');
 
@@ -65,6 +69,8 @@ export default function PeopleView({
   const [profilePhotoBlob, setProfilePhotoBlob] = useState<Blob | undefined>(undefined);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | undefined>(undefined);
   const [isCropperOpen, setIsCropperOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (profilePhotoBlob) {
@@ -88,7 +94,7 @@ export default function PeopleView({
 
   // Define preset & gathered relationships
   const defaultRelationships = [
-    'Daughter', 'Son', 'Mother', 'Father', 'Spouse', 'Sibling', 
+    'Daughter', 'Son', 'Mother', 'Father', 'Spouse', 'Sibling',
     'Best Friend', 'Friend', 'Partner', 'Coworker', 'Relative', 'Client', 'Manager'
   ];
   const dbRelationships = Array.from(new Set(people.map(p => p.relationship).filter(Boolean))) as string[];
@@ -115,6 +121,7 @@ export default function PeopleView({
     setSelectedTags([]);
     setCustomFields([]);
     setProfilePhotoBlob(undefined);
+    setSaveError(null);
     setIsFormOpen(true);
   };
 
@@ -125,11 +132,11 @@ export default function PeopleView({
     setLastName(person.lastName);
     setDisplayName(person.displayName);
     setDob(person.dob);
-    setDobPrecision(person.dobPrecision as any);
+    setDobPrecision(person.dobPrecision ?? 'full');
     setBirthTime(person.birthTime || '');
     setBirthLocation(person.birthLocation || '');
     setSexOrGender(person.sexOrGender || 'Male');
-    
+
     // Set relationship dropdown states
     const rel = person.relationship || '';
     if (!rel) {
@@ -144,15 +151,16 @@ export default function PeopleView({
     }
 
     // Set blood type preset dropdown state
-    const bTypeField = person.customFields.find(f => f.label === 'Blood Type');
+    const bTypeField = (person.customFields ?? []).find(f => f.label === 'Blood Type');
     setSelectedBloodType(bTypeField ? bTypeField.value : '');
 
     setNotes(person.notes || '');
     setIsFavorite(person.isFavorite);
-    setSelectedGroups(person.groups);
-    setSelectedTags(person.tags);
-    setCustomFields(person.customFields);
+    setSelectedGroups(person.groups ?? []);
+    setSelectedTags(person.tags ?? []);
+    setCustomFields(person.customFields ?? []);
     setProfilePhotoBlob(person.profilePhoto);
+    setSaveError(null);
     setIsFormOpen(true);
   };
 
@@ -182,9 +190,20 @@ export default function PeopleView({
     setSelectedTags(prev => prev.filter(t => t !== tag));
   };
 
-  const handleSavePerson = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!editPersonId) return;
+    const person = people.find(p => p.id === editPersonId);
+    if (person) {
+      openEditForm(person);
+      onEditPersonConsumed?.();
+    }
+  }, [editPersonId, people, onEditPersonConsumed]);
+
+  const handleSavePerson = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!firstName.trim() || !dob) return;
+    if (!firstName.trim() || !dob || isSaving) return;
+    setIsSaving(true);
+    setSaveError(null);
 
     const actualRelationship = relationshipOption === 'custom'
       ? customRelationship.trim()
@@ -210,17 +229,24 @@ export default function PeopleView({
       profilePhoto: profilePhotoBlob,
     };
 
-    if (editingPerson) {
-      onUpdatePerson({
-        ...editingPerson,
-        ...personPayload,
-        lastUpdatedDate: Date.now()
-      });
-    } else {
-      onAddPerson(personPayload);
+    try {
+      if (editingPerson) {
+        await onUpdatePerson({
+          ...editingPerson,
+          ...personPayload,
+          createdDate: editingPerson.createdDate,
+          lastUpdatedDate: Date.now()
+        });
+      } else {
+        await onAddPerson(personPayload);
+      }
+      setIsFormOpen(false);
+    } catch (error) {
+      console.error('Failed to save person', error);
+      setSaveError('Could not save this person. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
-    
-    setIsFormOpen(false);
   };
 
   // Toggle favoring
@@ -235,7 +261,7 @@ export default function PeopleView({
 
   // Filtering lists
   const now = new Date();
-  
+
   const processedPeople = people.map(p => {
     const age = calculateExactAge(p.dob, now, p.birthTime);
     const nextAnniv = calculateNextAnniversary(p.dob, now);
@@ -246,7 +272,7 @@ export default function PeopleView({
     const q = searchQuery.toLowerCase();
     const nameStr = `${person.firstName} ${person.lastName} ${person.displayName}`.toLowerCase();
     const matchesSearch = nameStr.includes(q) || person.notes?.toLowerCase().includes(q);
-    
+
     const matchesGroup = selectedGroup === 'all' || person.groups.includes(selectedGroup);
     const matchesTag = selectedTag === 'all' || person.tags.includes(selectedTag);
 
@@ -280,13 +306,13 @@ export default function PeopleView({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-4xl font-serif font-bold italic text-[#5A5A40] tracking-tight">People</h2>
-          <p className="text-[#7A7A7A] text-sm">Organize and keep details for the important figures in your life.</p>
+          <p className="text-[#7A7A7A] text-sm">Organize and keep details for the important people in your life.</p>
         </div>
-        <button 
+        <button
           onClick={openAddForm}
           className="flex items-center gap-1 bg-[#5A5A40] hover:bg-opacity-90 text-white py-2.5 px-4 rounded-2xl text-sm font-semibold transition self-start cursor-pointer"
         >
-          <Plus className="w-4 h-4" /> Log New Biography
+          <Plus className="w-4 h-4" /> Add Person
         </button>
       </div>
 
@@ -295,7 +321,7 @@ export default function PeopleView({
         {/* Search */}
         <div className="relative flex-1">
           <Search className="absolute left-3 top-3 text-[#8C8C8C] w-4 h-4" />
-          <input 
+          <input
             id={searchInputId}
             type="text"
             placeholder="Search names, custom descriptors, tags..."
@@ -354,14 +380,14 @@ export default function PeopleView({
 
           {/* Toggle Views */}
           <div className="flex bg-[#F5F2ED] p-1 rounded-xl border border-[#E5E0D8] h-9 shrink-0">
-            <button 
+            <button
               onClick={() => setViewMode('grid')}
               className={`p-1.5 rounded-lg transition-colors cursor-pointer ${viewMode === 'grid' ? 'bg-white text-[#5A5A40] shadow-sm' : 'text-[#8C8C8C]'}`}
               aria-label="Grid view"
             >
               <Grid className="w-4 h-4" />
             </button>
-            <button 
+            <button
               onClick={() => setViewMode('list')}
               className={`p-1.5 rounded-lg transition-colors cursor-pointer ${viewMode === 'list' ? 'bg-white text-[#5A5A40] shadow-sm' : 'text-[#8C8C8C]'}`}
               aria-label="List view"
@@ -376,13 +402,13 @@ export default function PeopleView({
       {filtered.length === 0 ? (
         <div className="bg-white border border-[#E5E0D8] rounded-[24px] p-12 text-center text-[#7A7A7A] max-w-lg mx-auto space-y-3 shadow-sm">
           <Info className="w-12 h-12 text-[#5A5A40] opacity-60 mx-auto" />
-          <h4 className="text-[#2D2D2D] font-serif font-bold italic text-lg">No biographies match your queries</h4>
-          <p className="text-xs">Try clearing filter parameters, adjusting names searches, or log a brand new contact using the button above.</p>
+          <h4 className="text-[#2D2D2D] font-serif font-bold italic text-lg">No people match your filters</h4>
+          <p className="text-xs">Try clearing filters, adjusting your search, or adding a new person.</p>
         </div>
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filtered.map(({ person, age, nextAnniv }) => (
-            <div 
+            <div
               key={person.id}
               onClick={() => onNavigateToPerson(person.id)}
               className="bg-white border border-[#E5E0D8] rounded-[24px] p-5 shadow-sm hover:translate-y-[-2px] transition-all cursor-pointer flex flex-col justify-between group space-y-4"
@@ -390,7 +416,7 @@ export default function PeopleView({
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
                   {person.profilePhoto ? (
-                    <img 
+                    <img
                       src={getBlobUrl(person.id, person.profilePhoto)}
                       alt={person.displayName}
                       className="w-16 h-16 rounded-full object-cover border border-[#E5E0D8]"
@@ -414,14 +440,14 @@ export default function PeopleView({
                 </div>
 
                 <div className="flex gap-1.5">
-                  <button 
+                  <button
                     onClick={(e) => handleToggleFavorite(person, e)}
                     className="p-2 bg-[#F5F2ED] hover:bg-[#E5E0D8]/40 border border-[#E5E0D8] rounded-xl cursor-pointer"
                     aria-label={person.isFavorite ? "Unfavorite" : "Favorite"}
                   >
                     <Heart className={`w-3.5 h-3.5 ${person.isFavorite ? 'text-[#8C6A5D] fill-[#8C6A5D]' : 'text-[#8C8C8C]'}`} />
                   </button>
-                  <button 
+                  <button
                     onClick={(e) => { e.stopPropagation(); openEditForm(person); }}
                     className="p-2 bg-[#F5F2ED] hover:bg-[#E5E0D8]/40 border border-[#E5E0D8] rounded-xl text-[#5A5A40] transition cursor-pointer"
                     aria-label="Edit Profile"
@@ -449,7 +475,7 @@ export default function PeopleView({
                   const matchG = groups.find(g => g.id === gId);
                   if (!matchG) return null;
                   return (
-                    <span 
+                    <span
                       key={gId}
                       className="text-[10px] px-2 py-0.5 rounded-full font-bold text-white shadow-sm"
                       style={{ backgroundColor: `${matchG.color}80` }}
@@ -459,7 +485,7 @@ export default function PeopleView({
                   );
                 })}
                 {person.tags.map(tag => (
-                  <span 
+                  <span
                     key={tag}
                     className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-[#F5F2ED] text-[#7A7A7A] border border-[#E5E0D8]"
                   >
@@ -474,16 +500,16 @@ export default function PeopleView({
         /* List Mode View density compact */
         <div className="bg-white border border-[#E5E0D8] rounded-[24px] overflow-hidden divide-y divide-[#E5E0D8] shadow-sm">
           {filtered.map(({ person, age, nextAnniv }) => (
-            <div 
+            <div
               key={person.id}
               onClick={() => onNavigateToPerson(person.id)}
               className="p-4 hover:bg-[#F9F8F6] flex items-center justify-between cursor-pointer transition group"
             >
               <div className="flex items-center gap-3">
                 {person.profilePhoto ? (
-                  <img 
-                    src={getBlobUrl(person.id, person.profilePhoto)} 
-                    alt={person.displayName} 
+                  <img
+                    src={getBlobUrl(person.id, person.profilePhoto)}
+                    alt={person.displayName}
                     className="w-10 h-10 rounded-full object-cover"
                     referrerPolicy="no-referrer"
                   />
@@ -507,7 +533,7 @@ export default function PeopleView({
                 <span className="text-xs font-semibold text-[#8C6A5D]">
                   Birthday in {nextAnniv.daysOnlyRemaining}d
                 </span>
-                <button 
+                <button
                   onClick={(e) => { e.stopPropagation(); openEditForm(person); }}
                   className="p-1 px-2.5 bg-[#F5F2ED] hover:bg-[#E5E0D8]/40 border border-[#E5E0D8] rounded text-xs text-[#5A5A40] font-semibold transition cursor-pointer"
                 >
@@ -525,10 +551,10 @@ export default function PeopleView({
           <div className="bg-white border border-[#E5E0D8] rounded-[32px] w-full max-w-2xl text-[#2D2D2D] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="p-5 border-b border-[#E5E0D8] flex justify-between items-center bg-[#F9F8F6]/85">
               <h3 className="text-lg font-serif font-bold italic text-[#5A5A40]">
-                {editingPerson ? 'Edit Contact Profile Info' : 'Log New Important Person Profile'}
+                {editingPerson ? 'Edit Person' : 'Add Person'}
               </h3>
-              <button 
-                onClick={() => setIsFormOpen(false)}
+              <button
+                onClick={() => { if (!isSaving) setIsFormOpen(false); }}
                 className="p-1.5 hover:bg-[#E5E0D8]/40 text-[#8C8C8C] rounded-full hover:text-[#2D2D2D] transition cursor-pointer"
                 aria-label="Close form"
               >
@@ -537,13 +563,14 @@ export default function PeopleView({
             </div>
 
             <form onSubmit={handleSavePerson} className="p-6 space-y-5 overflow-y-auto flex-1 custom-scrollbar">
+              {saveError && <div role="alert" className="bg-rose-50 text-rose-700 text-xs px-3.5 py-2.5 rounded-xl border border-rose-200 font-medium">{saveError}</div>}
               {/* Photo Upload Section */}
               <div className="flex flex-col items-center gap-3 border-b border-[#E5E0D8] pb-5">
                 <div className="relative">
                    {profilePhotoBlob && photoPreviewUrl ? (
-                    <img 
-                      src={photoPreviewUrl} 
-                      alt="Crop preview1" 
+                    <img
+                      src={photoPreviewUrl}
+                      alt={displayName || firstName || 'Profile photo preview'}
                       className="w-24 h-24 rounded-full object-cover border-4 border-[#5A5A40]"
                       referrerPolicy="no-referrer"
                     />
@@ -552,7 +579,7 @@ export default function PeopleView({
                       <User className="w-10 h-10" />
                     </div>
                   )}
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setIsCropperOpen(true)}
                     className="absolute bottom-0 right-0 p-1.5 bg-[#5A5A40] text-white rounded-full shadow-md text-xs cursor-pointer"
@@ -563,18 +590,18 @@ export default function PeopleView({
                 </div>
                 <div className="text-center flex flex-col items-center justify-center">
                   <div className="flex items-center gap-2">
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       onClick={() => setIsCropperOpen(true)}
                       className="text-xs text-[#5A5A40] hover:underline font-semibold cursor-pointer"
                     >
-                      {profilePhotoBlob ? 'Re-crop profile image' : 'Upload & Crop Photo'}
+                      {profilePhotoBlob ? 'Re-crop photo' : 'Add Photo'}
                     </button>
                     {profilePhotoBlob && (
                       <>
                         <span className="text-[#8C8C8C] text-xs">•</span>
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           onClick={() => setProfilePhotoBlob(undefined)}
                           className="text-xs text-rose-600 hover:underline font-semibold cursor-pointer"
                         >
@@ -583,14 +610,15 @@ export default function PeopleView({
                       </>
                     )}
                   </div>
-                  <p className="text-[10px] text-[#8C8C8C] mt-0.5">Will be compressed & saved securely to your device offline.</p>
+                  <p className="text-[10px] text-[#8C8C8C] mt-0.5">Photos are compressed and saved in this browser when you save the person.</p>
                 </div>
               </div>
 
               {/* Photo Cropper Nested Dialog Overlay */}
               {isCropperOpen && (
                 <div className="absolute inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-                  <PhotoCropper 
+                  <PhotoCropper
+                    initialPhotoUrl={photoPreviewUrl}
                     onPhotoSelected={(blob) => {
                       setProfilePhotoBlob(blob);
                       setIsCropperOpen(false);
@@ -604,8 +632,8 @@ export default function PeopleView({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">First Name *</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     required
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
@@ -615,8 +643,8 @@ export default function PeopleView({
 
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Middle Name</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={middleName}
                     onChange={(e) => setMiddleName(e.target.value)}
                     className="w-full bg-white border border-[#E5E0D8] rounded-xl px-3 py-2 text-sm text-[#2D2D2D] focus:outline-none focus:ring-1 focus:ring-[#5A5A40]"
@@ -625,8 +653,8 @@ export default function PeopleView({
 
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Last Name</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     className="w-full bg-white border border-[#E5E0D8] rounded-xl px-3 py-2 text-sm text-[#2D2D2D] focus:outline-none focus:ring-1 focus:ring-[#5A5A40]"
@@ -636,8 +664,8 @@ export default function PeopleView({
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Preferred Display Name (Emoji customisable)</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="e.g. Adaline 🌸 or Grandpa"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
@@ -649,8 +677,8 @@ export default function PeopleView({
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Birth Date *</label>
-                  <input 
-                    type="date" 
+                  <input
+                    type="date"
                     required
                     value={dob}
                     onChange={(e) => setDob(e.target.value)}
@@ -660,7 +688,7 @@ export default function PeopleView({
 
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Date Precision Type</label>
-                  <select 
+                  <select
                     value={dobPrecision}
                     onChange={(e) => setDobPrecision(e.target.value as any)}
                     className="w-full bg-white border border-[#E5E0D8] rounded-xl px-3 py-2 text-sm text-[#2D2D2D] focus:outline-none focus:ring-1 focus:ring-[#5A5A40] shadow-sm"
@@ -672,8 +700,8 @@ export default function PeopleView({
 
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Birth Time (Optional)</label>
-                  <input 
-                    type="time" 
+                  <input
+                    type="time"
                     value={birthTime}
                     onChange={(e) => setBirthTime(e.target.value)}
                     className="w-full bg-white border border-[#E5E0D8] rounded-xl px-3 py-2 text-sm text-[#2D2D2D] focus:outline-none focus:ring-1 focus:ring-[#5A5A40] shadow-sm"
@@ -682,8 +710,8 @@ export default function PeopleView({
 
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Birth Location (Optional)</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     list="birth-locations"
                     placeholder="e.g. London, UK"
                     value={birthLocation}
@@ -713,10 +741,10 @@ export default function PeopleView({
                     ))}
                     <option value="custom">✍️ Type Custom Relation...</option>
                   </select>
-                  
+
                   {relationshipOption === 'custom' && (
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       placeholder="Type custom relationship role"
                       value={customRelationship}
                       onChange={(e) => setCustomRelationship(e.target.value)}
@@ -742,7 +770,7 @@ export default function PeopleView({
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-2">Assign Groups</label>
                 {groups.length === 0 ? (
-                  <p className="text-xs text-[#8C8C8C] italic">No custom groups created yet. Create them in Utilities console settings.</p>
+                  <p className="text-xs text-[#8C8C8C] italic">No custom groups created yet. Create them in Settings.</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {groups.map(g => {
@@ -776,16 +804,16 @@ export default function PeopleView({
               <div className="space-y-2">
                 <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A]">Custom Tags ({selectedTags.length})</label>
                 <div className="flex gap-2">
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     placeholder="e.g. Birthday, Call, High Priority"
                     value={newTagInput}
                     onChange={(e) => setNewTagInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } }}
                     className="flex-1 bg-white border border-[#E5E0D8] rounded-xl px-3 py-2 text-sm text-[#2D2D2D] focus:outline-none focus:ring-1 focus:ring-[#5A5A40] shadow-sm"
                   />
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={handleAddTag}
                     className="py-2 px-4 bg-[#F5F2ED] hover:bg-[#E5E0D8]/40 border border-[#E5E0D8] text-[#5A5A40] text-xs font-semibold rounded-xl cursor-pointer shadow-sm"
                   >
@@ -844,7 +872,7 @@ export default function PeopleView({
                     )}
                   </div>
                   <div className="flex gap-2">
-                    <select 
+                    <select
                       value={selectedBloodType}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -886,8 +914,8 @@ export default function PeopleView({
                 </div>
 
                 <div className="flex gap-2">
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     list="preset-field-names"
                     placeholder="Field Name (e.g. Clothing Size)"
                     value={newFieldLabel}
@@ -908,15 +936,15 @@ export default function PeopleView({
                     <option value="Favorite Food" />
                     <option value="Hobbies" />
                   </datalist>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     placeholder="Property Details (e.g. M / 9)"
                     value={newFieldValue}
                     onChange={(e) => setNewFieldValue(e.target.value)}
                     className="flex-1 bg-white border border-[#E5E0D8] rounded-xl px-2.5 py-1.5 text-xs text-[#2D2D2D] focus:outline-none focus:ring-1 focus:ring-[#5A5A40] shadow-sm"
                   />
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={handleAddCustomField}
                     className="py-1.5 px-3 bg-[#8C6A5D] text-white text-xs font-bold rounded-xl cursor-pointer"
                   >
@@ -940,8 +968,8 @@ export default function PeopleView({
 
               {/* Notes */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Personal Biography / Private Notes</label>
-                <textarea 
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#7A7A7A] mb-1.5">Profile Details / Private Notes</label>
+                <textarea
                   rows={3}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
@@ -956,7 +984,7 @@ export default function PeopleView({
                   <h4 className="text-sm font-semibold text-[#2D2D2D] flex items-center gap-1"><Heart className="w-4 h-4 text-[#8C6A5D] fill-[#8C6A5D]" /> Priorities spotlight status</h4>
                   <p className="text-xs text-[#7A7A7A]">Check to lock this individual into priority spotlight rotations on the home interface.</p>
                 </div>
-                <input 
+                <input
                   type="checkbox"
                   checked={isFavorite}
                   onChange={(e) => setIsFavorite(e.target.checked)}
@@ -966,18 +994,19 @@ export default function PeopleView({
 
               {/* Action Buttons */}
               <div className="flex gap-2 border-t border-[#E5E0D8] pt-4">
-                <button 
+                <button
                   type="button"
-                  onClick={() => setIsFormOpen(false)}
+                  onClick={() => { if (!isSaving) setIsFormOpen(false); }}
                   className="flex-1 py-2.5 px-4 bg-[#F5F2ED] text-[#7A7A7A] border border-[#E5E0D8] text-sm font-semibold rounded-xl cursor-pointer hover:bg-opacity-80 text-center"
                 >
                   Cancel
                 </button>
-                <button 
+                <button
                   type="submit"
+                  disabled={isSaving}
                   className="flex-1 py-2.5 px-4 bg-[#5A5A40] text-white text-sm font-semibold rounded-xl cursor-pointer hover:bg-opacity-95 text-center"
                 >
-                  Save Profile
+                  {isSaving ? 'Saving…' : 'Save Person'}
                 </button>
               </div>
             </form>

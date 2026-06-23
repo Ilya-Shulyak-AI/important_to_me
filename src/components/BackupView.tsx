@@ -125,8 +125,8 @@ export default function BackupView({ onRefreshData }: BackupViewProps) {
   return (
     <div className="space-y-6 max-w-4xl mx-auto select-none">
       <div>
-        <h2 className="text-4xl font-serif font-bold italic text-[#5A5A40] tracking-tight">Security & Backups</h2>
-        <p className="text-[#7A7A7A] text-sm">Review local-first sandboxed file status, quotas, and export parameters.</p>
+        <h2 className="text-4xl font-serif font-bold italic text-[#5A5A40] tracking-tight">Backups</h2>
+        <p className="text-[#7A7A7A] text-sm">Review browser storage usage and export or restore local backups.</p>
       </div>
 
       {statusMessage && (
@@ -157,11 +157,11 @@ export default function BackupView({ onRefreshData }: BackupViewProps) {
               <div className="flex justify-between text-xs text-[#2D2D2D]">
                 <span>Persistent storage:</span>
                 <span className={`font-bold ${persistenceGranted ? 'text-emerald-600' : 'text-amber-600'}`}>
-                  {persistenceGranted ? 'Active / Secure' : 'Cache Only'}
+                  {persistenceGranted ? 'Persistence requested' : 'Best effort'}
                 </span>
               </div>
               <p className="text-[10px] text-[#7A7A7A] leading-normal">
-                Browser storage is typically sandboxed. Clearing Safari cookies/history could erase local files unless persistent storage mode is approved. Export regular file copies below to secure your work!
+                Browser storage can still be cleared by browser settings or device cleanup. Export regular backups to protect your data.
               </p>
             </div>
           </div>
@@ -169,14 +169,14 @@ export default function BackupView({ onRefreshData }: BackupViewProps) {
 
         {/* Import / Export center column */}
         <div className="md:col-span-2 bg-white border border-[#E5E0D8] rounded-[24px] p-6 space-y-5 shadow-sm">
-          <h3 className="text-sm font-serif font-bold italic text-[#2D2D2D]">Data Transfer Operations</h3>
+          <h3 className="text-sm font-serif font-bold italic text-[#2D2D2D]">Backup and Restore</h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Export box */}
             <div className="bg-[#F5F2ED]/40 p-5 rounded-xl border border-[#E5E0D8] space-y-4 flex flex-col justify-between">
               <div className="space-y-1">
-                <h4 className="text-sm font-bold text-[#2D2D2D]">Export Registry</h4>
-                <p className="text-xs text-[#7A7A7A] leading-normal">Compiles database coordinates, thumbnails, and profile photos into a secure `.importantdates` file package.</p>
+                <h4 className="text-sm font-bold text-[#2D2D2D]">Export Backup</h4>
+                <p className="text-xs text-[#7A7A7A] leading-normal">Exports records and photos into a `.importantdates` backup file.</p>
               </div>
               
               <div className="space-y-2">
@@ -186,7 +186,7 @@ export default function BackupView({ onRefreshData }: BackupViewProps) {
                   className="w-full py-2.5 px-4 bg-[#5A5A40] hover:bg-opacity-95 text-white font-bold rounded-xl text-xs transition flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50 shadow-none border-0"
                 >
                   <Download className="w-4 h-4" />
-                  {exporting ? 'Compiling Backup...' : 'Download Full Backup (with photos)'}
+                  {exporting ? 'Preparing Backup...' : 'Download Full Backup (with photos)'}
                 </button>
                 <button 
                   onClick={() => handleExportBackup(false)}
@@ -201,8 +201,8 @@ export default function BackupView({ onRefreshData }: BackupViewProps) {
             {/* Import box */}
             <div className="bg-[#F5F2ED]/40 p-5 rounded-xl border border-[#E5E0D8] space-y-4 flex flex-col justify-between">
               <div className="space-y-1">
-                <h4 className="text-sm font-bold text-[#2D2D2D]">Import Registry</h4>
-                <p className="text-xs text-[#7A7A7A] leading-normal">Load, parse, and upload previously compiled backup packages. Choose merge or replace conflict sequences.</p>
+                <h4 className="text-sm font-bold text-[#2D2D2D]">Import Backup</h4>
+                <p className="text-xs text-[#7A7A7A] leading-normal">Choose a backup file, preview its contents, and import with merge or replace behavior.</p>
               </div>
 
               <div>
@@ -358,7 +358,7 @@ export default function BackupView({ onRefreshData }: BackupViewProps) {
           <div className="p-4 bg-[#F5F2ED]/40 rounded-xl border border-[#E5E0D8] flex flex-col justify-between">
             <div className="space-y-1">
               <span className="text-xs font-bold text-[#8C6A5D]">Teardown/Purge Directory</span>
-              <p className="text-[11px] text-[#7A7A7A] leading-normal">Erases all offline cache structures, configurations, custom groups, files, and widgets payloads from this browser sandbox.</p>
+              <p className="text-[11px] text-[#7A7A7A] leading-normal">Erases local records, groups, photos, settings, and widget payloads from this browser.</p>
             </div>
             <button 
               onClick={handleClearDatabase}

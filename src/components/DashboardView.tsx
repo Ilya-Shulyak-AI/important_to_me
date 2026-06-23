@@ -101,7 +101,7 @@ export default function DashboardView({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-4xl font-serif font-bold italic text-[#5A5A40] tracking-tight">Dashboard</h2>
-          <p className="text-[#7A7A7A] text-sm">Welcome to your secure local tracking registry.</p>
+          <p className="text-[#7A7A7A] text-sm">Welcome to your local important dates tracker.</p>
         </div>
         <div className="flex gap-2">
           <button 
@@ -352,7 +352,7 @@ export default function DashboardView({
               <Clock className="w-5 h-5 text-[#8C6A5D]" />
               Upcoming Anniversaries & Birthdays
             </h3>
-            <p className="text-xs text-[#7A7A7A]">Chronological calendar countdown within your selected time interval.</p>
+            <p className="text-xs text-[#7A7A7A]">Calendar countdowns within your selected time interval.</p>
           </div>
 
           <div className="flex bg-[#F5F2ED] p-1 rounded-xl border border-[#E5E0D8] self-start">

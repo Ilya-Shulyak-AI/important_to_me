@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useId } from 'react';
-import { Upload, Sliders, Move, X, Eye, FileImage } from 'lucide-react';
+import { Upload, Sliders, Move, X, FileImage } from 'lucide-react';
 
 interface PhotoCropperProps {
   onPhotoSelected: (blob: Blob) => void;
@@ -16,7 +16,7 @@ export default function PhotoCropper({ onPhotoSelected, onCancel, initialPhotoUr
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [fileSize, setFileSize] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
@@ -31,14 +31,15 @@ export default function PhotoCropper({ onPhotoSelected, onCancel, initialPhotoUr
     if (files && files.length > 0) {
       processFile(files[0]);
     }
+    e.target.value = '';
   };
 
   const processFile = (file: File) => {
     setError(null);
 
     // Validate if file is an image
-    if (!file.type.startsWith('image/')) {
-      setError('Unsupported file format. Please upload an image (JPEG, PNG, SVG).');
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setError('Unsupported file format. Please upload a JPEG, PNG, or WebP image.');
       return;
     }
 
@@ -61,7 +62,7 @@ export default function PhotoCropper({ onPhotoSelected, onCancel, initialPhotoUr
       }
     };
     reader.onerror = () => {
-      setError('Failed to read visual image file from disk.');
+      setError('Failed to read the selected image.');
     };
     reader.readAsDataURL(file);
   };
@@ -93,7 +94,7 @@ export default function PhotoCropper({ onPhotoSelected, onCancel, initialPhotoUr
     if (!isDragging || !imgSource) return;
     const newX = e.clientX - dragStart.x;
     const newY = e.clientY - dragStart.y;
-    
+
     // Set constraint boundaries (keep somewhat centered)
     setOffsetX(newX);
     setOffsetY(newY);
@@ -102,7 +103,9 @@ export default function PhotoCropper({ onPhotoSelected, onCancel, initialPhotoUr
   const handlePointerUp = (e: React.PointerEvent) => {
     setIsDragging(false);
     if (containerRef.current) {
-      containerRef.current.releasePointerCapture(e.pointerId);
+      if (containerRef.current.hasPointerCapture(e.pointerId)) {
+        containerRef.current.releasePointerCapture(e.pointerId);
+      }
     }
   };
 
@@ -111,13 +114,13 @@ export default function PhotoCropper({ onPhotoSelected, onCancel, initialPhotoUr
     if (!canvasRef.current || !imgSource) return;
     const ctx = canvasRef.current.getContext('2d');
     const img = new Image();
-    
+
     img.onload = () => {
       if (!ctx || !canvasRef.current) return;
-      
+
       // Clear the canvas
       ctx.clearRect(0, 0, 300, 300);
-      
+
       // We want to draw a circular/square crop onto our 300x300 target
       // Apply offset, zoom, and draw
       const size = 300;
@@ -134,7 +137,7 @@ export default function PhotoCropper({ onPhotoSelected, onCancel, initialPhotoUr
       const iw = img.width;
       const ih = img.height;
       const minDim = Math.min(iw, ih);
-      
+
       // Center-crop parameters by default
       const sx = (iw - minDim) / 2;
       const sy = (ih - minDim) / 2;
@@ -172,7 +175,7 @@ export default function PhotoCropper({ onPhotoSelected, onCancel, initialPhotoUr
           Edit Profile Photo
         </h3>
         {onCancel && (
-          <button onClick={onCancel} className="p-1 hover:bg-[#F5F2ED] rounded-full text-[#7A7A7A] hover:text-[#5A5A40] transition cursor-pointer" aria-label="Cancel crop border-0">
+          <button type="button" onClick={onCancel} className="p-1 hover:bg-[#F5F2ED] rounded-full text-[#7A7A7A] hover:text-[#5A5A40] transition cursor-pointer" aria-label="Cancel photo editing">
             <X className="w-5 h-5" />
           </button>
         )}
@@ -185,7 +188,7 @@ export default function PhotoCropper({ onPhotoSelected, onCancel, initialPhotoUr
       )}
 
       {!imgSource ? (
-        <div 
+        <div
           id={dropZoneId}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
@@ -197,14 +200,14 @@ export default function PhotoCropper({ onPhotoSelected, onCancel, initialPhotoUr
           </div>
           <div className="space-y-1">
             <p className="font-semibold text-[#2D2D2D]">Drag and drop profile photo here</p>
-            <p className="text-xs text-[#7A7A7A]">or click to browse from device (JPEG, PNG)</p>
+            <p className="text-xs text-[#7A7A7A]">or click to browse from device (JPEG, PNG, WebP)</p>
           </div>
-          <input 
+          <input
             id={fileInputId}
-            type="file" 
-            accept="image/*" 
-            className="hidden" 
-            onChange={handleFileChange} 
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={handleFileChange}
           />
         </div>
       ) : (
@@ -214,8 +217,8 @@ export default function PhotoCropper({ onPhotoSelected, onCancel, initialPhotoUr
             <p className="text-xs text-[#7A7A7A] mb-2 flex items-center gap-1">
               <Move className="w-3.5 h-3.5 text-[#8C6A5D]" /> Tap and drag picture below to reposition
             </p>
-            
-            <div 
+
+            <div
               ref={containerRef}
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
@@ -225,10 +228,10 @@ export default function PhotoCropper({ onPhotoSelected, onCancel, initialPhotoUr
               style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
             >
               {/* Image Preview applying scale & offsets */}
-              <img 
+              <img
                 ref={imageRef}
-                src={imgSource} 
-                alt="Repositioning target" 
+                src={imgSource}
+                alt="Repositioning target"
                 draggable={false}
                 className="absolute origin-center w-full h-full object-cover select-none pointer-events-none"
                 style={{
@@ -236,7 +239,7 @@ export default function PhotoCropper({ onPhotoSelected, onCancel, initialPhotoUr
                 }}
               />
             </div>
-            
+
             {fileSize && (
               <span className="mt-2 text-[11px] font-mono text-[#7A7A7A] bg-[#F5F2ED] border border-[#E5E0D8] px-2 py-0.5 rounded">
                 Size: {fileSize}
@@ -251,20 +254,21 @@ export default function PhotoCropper({ onPhotoSelected, onCancel, initialPhotoUr
                 <Sliders className="w-3.5 h-3.5 text-[#8C6A5D]" />
                 Scale / Zoom ({(scale * 100).toFixed(0)}%)
               </label>
-              <button 
+              <button
+                type="button"
                 onClick={() => { setScale(1); setOffsetX(0); setOffsetY(0); }}
                 className="text-[10px] text-[#5A5A40] hover:text-opacity-80 font-bold border-0 bg-transparent cursor-pointer"
               >
                 Reset
               </button>
             </div>
-            <input 
+            <input
               id={zoomSliderId}
-              type="range" 
-              min="0.5" 
-              max="3" 
-              step="0.05" 
-              value={scale} 
+              type="range"
+              min="0.5"
+              max="3"
+              step="0.05"
+              value={scale}
               onChange={(e) => setScale(parseFloat(e.target.value))}
               className="w-full h-1.5 bg-white border border-[#E5E0D8] rounded-lg appearance-none cursor-pointer accent-[#5A5A40]"
             />
@@ -275,17 +279,19 @@ export default function PhotoCropper({ onPhotoSelected, onCancel, initialPhotoUr
 
           {/* Buttons */}
           <div className="flex gap-2">
-            <button 
+            <button
+              type="button"
               onClick={() => setImgSource(null)}
               className="flex-1 py-2.5 px-4 bg-[#F5F2ED] hover:bg-[#E5E0D8]/40 border border-[#E5E0D8] text-[#5A5A40] text-xs font-bold uppercase tracking-wider rounded-xl transition cursor-pointer"
             >
               Change Image
             </button>
-            <button 
+            <button
+              type="button"
               onClick={handleSaveCrop}
               className="flex-1 py-2.5 px-4 bg-[#5A5A40] hover:bg-opacity-95 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition cursor-pointer border-0"
             >
-              Apply Crop & Save
+              Apply Crop
             </button>
           </div>
         </div>

@@ -23,9 +23,8 @@ export default defineConfig(() => ({
     },
   },
   server: {
-    // HMR can be disabled in Google AI Studio with DISABLE_HMR=true.
+    // DISABLE_HMR is useful in constrained hosted editors where file watching is expensive.
     hmr: process.env.DISABLE_HMR !== 'true',
-    // Disable file watching with HMR to reduce CPU use during agent edits.
     watch: process.env.DISABLE_HMR === 'true' ? null : {},
   },
 }));

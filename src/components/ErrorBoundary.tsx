@@ -49,7 +49,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             </div>
             
             <div className="space-y-2">
-              <h1 className="text-2xl font-serif font-bold italic text-[#2D2D2D]">Workspace Security Intercepted</h1>
+              <h1 className="text-2xl font-serif font-bold italic text-[#2D2D2D]">Something went wrong</h1>
               <p className="text-xs text-[#7A7A7A] leading-relaxed">
                 The application encountered an unexpected runtime sandbox constraint or device storage exception. This often occurs when third-party database / IndexedDB access is restricted inside iframe browsers.
               </p>
@@ -70,7 +70,7 @@ export default class ErrorBoundary extends Component<Props, State> {
                 className="flex-1 py-3 px-4 bg-[#5A5A40] hover:bg-opacity-95 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition cursor-pointer flex items-center justify-center gap-2 border-0 shadow-sm"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                Reload Registry
+                Reload App
               </button>
               
               <button

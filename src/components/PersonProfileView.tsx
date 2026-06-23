@@ -197,7 +197,7 @@ export default function PersonProfileView({
           </div>
         </div>
 
-        {/* Detailed Chronological age metrics middle-right */}
+        {/* Detailed age metrics */}
         <div className="md:col-span-2 space-y-6">
           {/* Big countdown banner */}
           <div className="bg-[#5A5A40]/5 border border-[#5A5A40]/15 rounded-[24px] p-6 flex items-center justify-between shadow-sm">
@@ -219,7 +219,7 @@ export default function PersonProfileView({
           {/* Age Breakdowns */}
           <div className="bg-white border border-[#E5E0D8] rounded-[24px] p-6 space-y-4 shadow-sm">
             <h4 className="text-sm font-serif font-bold italic text-[#2D2D2D] flex items-center gap-1">
-              <Clock className="w-4 h-4 text-[#8C6A5D]" /> Chronological Age Matrix
+              <Clock className="w-4 h-4 text-[#8C6A5D]" /> Age Details
             </h4>
 
             {age.isYearUnknown ? (
@@ -293,7 +293,7 @@ export default function PersonProfileView({
           {/* Personal Notes */}
           {person.notes && (
             <div className="bg-white border border-[#E5E0D8] rounded-[24px] p-6 space-y-2 text-xs leading-relaxed shadow-sm">
-              <h4 className="text-sm font-serif font-bold italic text-[#2D2D2D]">Personal Biography notes</h4>
+              <h4 className="text-sm font-serif font-bold italic text-[#2D2D2D]">Profile details</h4>
               <p className="text-[#2D2D2D] bg-[#F5F2ED]/40 p-4 rounded-xl border border-[#E5E0D8] font-sans">
                 {person.notes}
               </p>

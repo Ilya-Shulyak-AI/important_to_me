@@ -1,6 +1,5 @@
 {
-  "name": "Important Dates",
-  "description": "A private, local-first app for tracking people, birthdays, anniversaries, and custom life events with advanced age and countdown calculations.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "name": "Important to Me",
+  "description": "A private, local-first app for tracking important people, dates, events, photos, notes, and backups.",
+  "requestFramePermissions": []
 }
