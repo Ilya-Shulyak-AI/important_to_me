@@ -93,6 +93,28 @@ export async function runAllDiagnostics(): Promise<TestResult[]> {
     assert('Partial Date parsing - month', partialParsed.month === 8, 'Month is 8');
     assert('Partial Date parsing - day', partialParsed.day === 15, 'Day is 15');
 
+    const invalidFullDate = parseLocalDate('2023-02-29');
+    assert(
+      'Invalid full date parsing is normalized',
+      invalidFullDate.precision === 'approximate' && invalidFullDate.month === 1 && invalidFullDate.day === 1,
+      `Expected invalid 2023-02-29 to normalize to approximate Jan 1, got ${invalidFullDate.month}-${invalidFullDate.day}`
+    );
+
+    const invalidMonthDay = parseLocalDate('13-45');
+    assert(
+      'Invalid partial date parsing is normalized',
+      invalidMonthDay.precision === 'approximate' && invalidMonthDay.month === 1 && invalidMonthDay.day === 1,
+      `Expected invalid 13-45 to normalize to approximate Jan 1, got ${invalidMonthDay.month}-${invalidMonthDay.day}`
+    );
+
+    const futureEventStrWithUnits = '2028-12-25';
+    const futureAgeWithUnits = calculateExactAge(futureEventStrWithUnits, new Date(2026, 5, 22));
+    assert(
+      'Future event age calendar units are safe',
+      futureAgeWithUnits.years === 0 && futureAgeWithUnits.months === 0 && futureAgeWithUnits.days === 0,
+      `Expected future event calendar units to be zero, got ${futureAgeWithUnits.years}y ${futureAgeWithUnits.months}m ${futureAgeWithUnits.days}d`
+    );
+
     // 11. Database integration check (creating person, event, and querying)
     const testPersonId = 'test-diagnostic-person';
     const testPerson: Person = {
