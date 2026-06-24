@@ -3,7 +3,7 @@
 const APP_NAME = 'Important to Me';
 const DATA_DIR = 'ImportantToMe';
 const DATA_FILE = 'important-to-me-widget-data.json';
-const DEFAULT_APP_URL = 'https://ai.studio/apps/c3dda66e-fc84-4a5f-8ccd-33292b78197b';
+const DEFAULT_APP_URL = 'https://ilya-shulyak-ai.github.io/important_to_me/';
 const COLORS = {
   bg: Color.dynamic(new Color('#F4EFE5'), new Color('#1F211D')),
   card: Color.dynamic(new Color('#FFFDF8'), new Color('#2B2E28')),

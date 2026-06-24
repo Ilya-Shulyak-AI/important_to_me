@@ -1,5 +1,5 @@
 export const APP_NAME = 'Important to Me';
-export const CANONICAL_APP_URL = 'https://ai.studio/apps/c3dda66e-fc84-4a5f-8ccd-33292b78197b';
+export const CANONICAL_APP_URL = 'https://ilya-shulyak-ai.github.io/important_to_me/';
 export const SCRIPTABLE_APP_STORE_URL = 'https://apps.apple.com/us/app/scriptable/id1405459188';
 export const SCRIPTABLE_DOCS_URL = 'https://docs.scriptable.app/';
 export const SCRIPTABLE_WIDGET_DOCS_URL = 'https://docs.scriptable.app/listwidget/';

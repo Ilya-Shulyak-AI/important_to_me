@@ -1,8 +1,12 @@
 # Important to Me
 
-[Open Important to Me](https://ai.studio/apps/c3dda66e-fc84-4a5f-8ccd-33292b78197b)
+[Open Important to Me](https://ilya-shulyak-ai.github.io/important_to_me/) · [View the GitHub repository](https://github.com/Ilya-Shulyak-AI/important_to_me)
 
 Important to Me is a local-first browser app for remembering important people, birthdays, anniversaries, milestones, groups, notes, and backups.
+
+## Creator
+
+Created and directed by **Ilya Shulyak** (`@Ilya-Shulyak-AI`). The original concept, requirements, product decisions, testing feedback, and continued development direction are Ilya's contributions. The first prototype was generated with Google AI Studio and was later moved into this GitHub repository for continued development and deployment.
 
 ## Features
 
@@ -16,6 +20,16 @@ Important to Me is a local-first browser app for remembering important people, b
 ## Local-First Storage
 
 Important to Me stores application data locally in this browser using IndexedDB. It does not add accounts, subscriptions, advertising, analytics, a cloud database, or an unnecessary backend. Data does not automatically sync between devices. Clearing browser data, switching browsers, or browser storage eviction can delete local records.
+
+### Moving from the AI Studio version
+
+The AI Studio app and the GitHub Pages app use different website addresses, so browsers treat their local data as separate. Before switching:
+
+1. Open the existing AI Studio version.
+2. Export a full backup.
+3. Open the GitHub-hosted version.
+4. Import that backup.
+5. After confirming the data is present, remove the old Home Screen shortcut and add the GitHub-hosted app to the Home Screen.
 
 ## Backup and Restore
 
@@ -55,8 +69,9 @@ The widget export is created locally and is not uploaded by Important to Me. Scr
 - Dexie and IndexedDB
 - JSZip for backup packages
 - Lucide React icons
+- GitHub Actions and GitHub Pages for deployment
 
-The app is a static Vite application and does not require a backend or Gemini API key.
+The app is a static Vite application and does not require a backend, Gemini API key, or Google AI Studio hosting.
 
 ## Local Development
 
@@ -89,6 +104,14 @@ npm audit
 
 Automated tests cover backup/photo compatibility, Scriptable widget export privacy and sorting, Scriptable source safety, reusable dropdown behavior, search/filter source behavior, and active branding assets.
 
+## Deployment
+
+Pushes to `main` are built and deployed through `.github/workflows/deploy-pages.yml`. The repository's **Settings → Pages → Build and deployment → Source** must be set to **GitHub Actions**.
+
+The production address is:
+
+`https://ilya-shulyak-ai.github.io/important_to_me/`
+
 ## Known Limitations
 
 - Data is local to the current browser profile unless you export and import backups manually.
@@ -101,4 +124,4 @@ Automated tests cover backup/photo compatibility, Scriptable widget export priva
 
 ## Origin
 
-The first version was prototyped with Google AI Studio. The project has since been normalized as a local-first React/Vite application without requiring Gemini or AI Studio services.
+The first version was prototyped with Google AI Studio from Ilya Shulyak's product concept. The project is now maintained and deployed from GitHub as a local-first React/Vite application without requiring Gemini or AI Studio services.
