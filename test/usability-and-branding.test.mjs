@@ -29,8 +29,8 @@ test('people and event screens include reusable inputs and clear filters', () =>
 
 test('branding assets are active and app title is consistent', () => {
   assert.match(index, /<title>Important to Me<\/title>/);
-  assert.match(index, /\/favicon\.svg/);
-  assert.match(index, /\/manifest\.webmanifest/);
+  assert.match(index, /(?:%BASE_URL%|\/)favicon\.svg/);
+  assert.match(index, /(?:%BASE_URL%|\/)manifest\.webmanifest/);
   assert.match(manifest, /Important to Me/);
   assert.ok(existsSync('public/favicon.svg'));
   assert.ok(existsSync('public/apple-touch-icon.svg'));
