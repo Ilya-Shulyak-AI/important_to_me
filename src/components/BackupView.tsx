@@ -23,6 +23,8 @@ export default function BackupView({ onRefreshData }: BackupViewProps) {
   const [statusMessage, setStatusMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
   const [showSeedConfirm, setShowSeedConfirm] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [confirmPhrase, setConfirmPhrase] = useState('');
+  const [seedPhrase, setSeedPhrase] = useState('');
 
   const fileInputId = useId();
 
@@ -127,6 +129,22 @@ export default function BackupView({ onRefreshData }: BackupViewProps) {
       <div>
         <h2 className="text-4xl font-serif font-bold italic text-[#5A5A40] tracking-tight">Backups</h2>
         <p className="text-[#7A7A7A] text-sm">Review browser storage usage and export or restore local backups.</p>
+          <button
+            type="button"
+            onClick={async () => {
+              const stats = await checkAndRequestPersistence();
+              setStatusMessage({
+                type: 'ok',
+                text: stats.granted
+                  ? 'This browser agreed to keep site data when possible.'
+                  : 'Could not pin storage — export backups regularly, especially on iPhone Safari.',
+              });
+              loadStorageMetrics();
+            }}
+            className="mt-3 inline-flex rounded-xl border border-[#E5E0D8] bg-white px-3 py-2 text-xs font-bold text-[#5A5A40]"
+          >
+            Ask this browser to keep site data
+          </button>
       </div>
 
       {statusMessage && (
@@ -357,14 +375,14 @@ export default function BackupView({ onRefreshData }: BackupViewProps) {
 
           <div className="p-4 bg-[#F5F2ED]/40 rounded-xl border border-[#E5E0D8] flex flex-col justify-between">
             <div className="space-y-1">
-              <span className="text-xs font-bold text-[#8C6A5D]">Teardown/Purge Directory</span>
+              <span className="text-xs font-bold text-[#8C6A5D]">Erase everything in this browser</span>
               <p className="text-[11px] text-[#7A7A7A] leading-normal">Erases local records, groups, photos, settings, and widget payloads from this browser.</p>
             </div>
             <button 
               onClick={handleClearDatabase}
               className="mt-4 w-full py-2 px-3 bg-[#8C6A5D] hover:opacity-90 text-white font-bold text-xs rounded-lg transition cursor-pointer border-0"
             >
-              Flush All Device Data
+              Erase all local data
             </button>
           </div>
         </div>
@@ -373,28 +391,37 @@ export default function BackupView({ onRefreshData }: BackupViewProps) {
       {showSeedConfirm && (
         <div className="fixed inset-0 z-50 bg-[#2D2D2D]/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white border border-[#E5E0D8] rounded-[24px] p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <h3 className="text-lg font-serif font-bold italic text-[#2D2D2D]">Seed Mock Data?</h3>
+            <h3 className="text-lg font-serif font-bold italic text-[#2D2D2D]">Load demo people?</h3>
             <p className="text-xs text-[#7A7A7A] leading-relaxed">
-              Populate database with demo coordinates? Fictional characters (Maverick, Adaline, Myles) will be registered into your directory.
+              This replaces your current people and events with fictional demo profiles (Maverick, Adaline, Myles). Type LOAD DEMO below to confirm.
             </p>
+            <input
+              value={seedPhrase}
+              onChange={(e) => setSeedPhrase(e.target.value)}
+              placeholder='Type LOAD DEMO'
+              className="w-full rounded-xl border border-[#E5E0D8] px-3 py-2 text-xs"
+              aria-label="Type LOAD DEMO to confirm"
+            />
             <div className="flex gap-2.5 pt-2">
               <button 
-                onClick={() => setShowSeedConfirm(false)}
+                onClick={() => { setShowSeedConfirm(false); setSeedPhrase(''); }}
                 className="flex-1 py-2 px-4 bg-[#F5F2ED] hover:bg-[#E5E0D8]/40 border border-[#E5E0D8] text-[#5A5A40] text-xs font-bold uppercase rounded-xl transition cursor-pointer"
               >
                 Cancel
               </button>
               <button 
+                disabled={seedPhrase.trim().toUpperCase() !== 'LOAD DEMO'}
                 onClick={async () => {
                   setShowSeedConfirm(false);
+                  setSeedPhrase('');
                   await seedDemoData();
                   onRefreshData();
                   loadStorageMetrics();
                   setStatusMessage({ type: 'ok', text: 'Loaded fictional demo dataset!' });
                 }}
-                className="flex-1 py-2 px-4 bg-[#5A5A40] hover:bg-opacity-95 text-white text-xs font-bold uppercase rounded-xl transition cursor-pointer border-0"
+                className="flex-1 py-2 px-4 bg-[#5A5A40] hover:bg-opacity-95 text-white text-xs font-bold uppercase rounded-xl transition cursor-pointer border-0 disabled:opacity-40"
               >
-                Seed Data
+                Load demo
               </button>
             </div>
           </div>
@@ -406,26 +433,35 @@ export default function BackupView({ onRefreshData }: BackupViewProps) {
           <div className="bg-white border border-[#E5E0D8] rounded-[24px] p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <h3 className="text-lg font-serif font-bold italic text-[#2D2D2D]">Clear Database?</h3>
             <p className="text-xs text-[#7A7A7A] leading-relaxed">
-              Warning! This clears all offline database logs, files, custom criteria, and configurations from this device cache permanently and irreversibly.
+              This permanently deletes people, events, photos, groups, and settings stored in this browser. Type DELETE to confirm. Export a backup first if you care about this data.
             </p>
+            <input
+              value={confirmPhrase}
+              onChange={(e) => setConfirmPhrase(e.target.value)}
+              placeholder="Type DELETE"
+              className="w-full rounded-xl border border-[#E5E0D8] px-3 py-2 text-xs"
+              aria-label="Type DELETE to confirm erase"
+            />
             <div className="flex gap-2.5 pt-2">
               <button 
-                onClick={() => setShowClearConfirm(false)}
+                onClick={() => { setShowClearConfirm(false); setConfirmPhrase(''); }}
                 className="flex-1 py-2 px-4 bg-[#F5F2ED] hover:bg-[#E5E0D8]/40 border border-[#E5E0D8] text-[#5A5A40] text-xs font-bold uppercase rounded-xl transition cursor-pointer"
               >
                 Cancel
               </button>
               <button 
+                disabled={confirmPhrase.trim().toUpperCase() !== 'DELETE'}
                 onClick={async () => {
                   setShowClearConfirm(false);
+                  setConfirmPhrase('');
                   await flushAllAndReset();
                   onRefreshData();
                   loadStorageMetrics();
-                  setStatusMessage({ type: 'ok', text: 'Database cache cleared successfully.' });
+                  setStatusMessage({ type: 'ok', text: 'All local data erased.' });
                 }}
-                className="flex-1 py-2 px-4 bg-[#8C6A5D] hover:opacity-95 text-white text-xs font-bold uppercase rounded-xl transition cursor-pointer border-0"
+                className="flex-1 py-2 px-4 bg-[#8C6A5D] hover:opacity-95 text-white text-xs font-bold uppercase rounded-xl transition cursor-pointer border-0 disabled:opacity-40"
               >
-                Clear All
+                Erase all
               </button>
             </div>
           </div>

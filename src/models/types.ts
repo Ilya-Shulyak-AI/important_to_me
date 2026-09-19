@@ -91,6 +91,7 @@ export interface SavedFilter {
   isFavoriteOnly?: boolean;
 }
 
+/** @deprecated Legacy native-widget config kept only for older backup imports. Scriptable does not use this. */
 export interface WidgetConfig {
   id: string;
   title: string;

@@ -4,10 +4,11 @@ import {
   Tag, Loader2, Calendar, User, AlignLeft, Info, HelpCircle, Edit, Star, X
 } from 'lucide-react';
 import { calculateExactAge, calculateNextAnniversary, formatDateLabel } from '../date-engine/engine';
-import { getBlobUrl } from '../database/db';
+import { db, getBlobUrl } from '../database/db';
 import PhotoCropper from './PhotoCropper';
 import CreatableCombobox, { uniqueCaseInsensitive } from './ui/CreatableCombobox';
-import type { Person, Group, CustomField } from '../models/types';
+import type { Person, Group, CustomField, SavedFilter } from '../models/types';
+import SearchField from './ui/SearchField';
 
 interface PeopleViewProps {
   people: Person[];
@@ -32,6 +33,8 @@ export default function PeopleView({
 }: PeopleViewProps) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
+  const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([]);
+  const [savedFilterName, setSavedFilterName] = useState('');
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
   const [selectedTag, setSelectedTag] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'name' | 'age' | 'birthday' | 'recently-added'>('name');
@@ -86,6 +89,45 @@ export default function PeopleView({
   }, [profilePhotoBlob]);
 
   const searchInputId = useId();
+
+  const loadSavedFilters = async () => {
+    try {
+      const rows = await db.savedFilters.toArray();
+      setSavedFilters(rows);
+    } catch (error) {
+      console.error('Failed to load saved filters', error);
+    }
+  };
+
+  useEffect(() => {
+    void loadSavedFilters();
+  }, []);
+
+  const saveCurrentFilter = async () => {
+    const name = savedFilterName.trim();
+    if (!name) return;
+    const filter: SavedFilter = {
+      id: `sf-${Date.now()}`,
+      name,
+      searchQuery: searchQuery || undefined,
+      groupIds: selectedGroup !== 'all' ? [selectedGroup] : undefined,
+      tags: selectedTag !== 'all' ? [selectedTag] : undefined,
+    };
+    await db.savedFilters.put(filter);
+    setSavedFilterName('');
+    await loadSavedFilters();
+  };
+
+  const applySavedFilter = (filter: SavedFilter) => {
+    setSearchQuery(filter.searchQuery || '');
+    setSelectedGroup(filter.groupIds?.[0] || 'all');
+    setSelectedTag(filter.tags?.[0] || 'all');
+  };
+
+  const deleteSavedFilter = async (id: string) => {
+    await db.savedFilters.delete(id);
+    await loadSavedFilters();
+  };
   const groupSelectId = useId();
   const tagSelectId = useId();
   const sortSelectId = useId();
@@ -323,17 +365,15 @@ export default function PeopleView({
       {/* Directory filters line */}
       <div className="bg-white border border-[#E5E0D8] p-4 rounded-[24px] flex flex-col lg:flex-row gap-4 justify-between items-stretch lg:items-center shadow-sm">
         {/* Search */}
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-3 text-[#8C8C8C] w-4 h-4" />
-          <input
-            id={searchInputId}
-            type="text"
-            placeholder="Search names, custom descriptors, tags..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white border border-[#E5E0D8] rounded-xl pl-9 pr-4 py-2 text-[#2D2D2D] placeholder-[#8C8C8C] focus:outline-none focus:ring-1 focus:ring-[#5A5A40] text-sm"
-          />
-        </div>
+        <SearchField
+          id={searchInputId}
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Search names, custom descriptors, tags..."
+          aria-label="Search people"
+          leadingIcon={<Search className="absolute left-3 top-3 text-[#8C8C8C] w-4 h-4 pointer-events-none" />}
+          inputClassName="w-full bg-white border border-[#E5E0D8] rounded-xl pl-9 pr-4 py-2 text-[#2D2D2D] placeholder-[#8C8C8C] focus:outline-none focus:ring-1 focus:ring-[#5A5A40] text-sm"
+        />
 
         {/* Dropdowns */}
         <div className="flex flex-wrap md:flex-nowrap gap-2 items-center">
@@ -404,11 +444,31 @@ export default function PeopleView({
 
       {/* Directory Grid/List Elements */}
       {(searchQuery || selectedGroup !== 'all' || selectedTag !== 'all') && <div className="flex flex-wrap gap-2"><button onClick={() => { setSearchQuery(''); setSelectedGroup('all'); setSelectedTag('all'); }} className="rounded-xl border border-[#E5E0D8] bg-white px-3 py-1.5 text-xs font-bold text-[#5A5A40]">Clear filters</button></div>}
+      <div className="bg-white border border-[#E5E0D8] rounded-2xl p-3 flex flex-col sm:flex-row gap-2 items-stretch sm:items-center shadow-sm">
+        <input
+          value={savedFilterName}
+          onChange={(e) => setSavedFilterName(e.target.value)}
+          placeholder="Name this filter (e.g. Church)"
+          className="flex-1 rounded-xl border border-[#E5E0D8] px-3 py-1.5 text-xs"
+          aria-label="Saved filter name"
+        />
+        <button type="button" onClick={() => void saveCurrentFilter()} className="rounded-xl bg-[#5A5A40] text-white px-3 py-1.5 text-xs font-bold">Save filter</button>
+        {savedFilters.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {savedFilters.map((f) => (
+              <span key={f.id} className="inline-flex items-center gap-1 rounded-full border border-[#E5E0D8] bg-[#F9F8F6] px-2 py-1 text-[11px]">
+                <button type="button" className="font-semibold text-[#5A5A40]" onClick={() => applySavedFilter(f)}>{f.name}</button>
+                <button type="button" className="text-[#8C6A5D]" aria-label={`Delete filter ${f.name}`} onClick={() => void deleteSavedFilter(f.id)}>×</button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
       {filtered.length === 0 ? (
         <div className="bg-white border border-[#E5E0D8] rounded-[24px] p-12 text-center text-[#7A7A7A] max-w-lg mx-auto space-y-3 shadow-sm">
           <Info className="w-12 h-12 text-[#5A5A40] opacity-60 mx-auto" />
-          <h4 className="text-[#2D2D2D] font-serif font-bold italic text-lg">No people match your filters</h4>
-          <p className="text-xs">Try clearing filters, adjusting your search, or adding a new person.</p>
+          <h4 className="text-[#2D2D2D] font-serif font-bold italic text-lg">No people match these filters</h4>
+          <p className="text-xs">Clear filters, tweak search, or add someone new.</p>
         </div>
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
