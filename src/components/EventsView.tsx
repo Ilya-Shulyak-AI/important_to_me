@@ -8,6 +8,7 @@ import type { Person, Event, Group, EventType, CustomField } from '../models/typ
 import PhotoCropper from './PhotoCropper';
 import CreatableCombobox, { uniqueCaseInsensitive } from './ui/CreatableCombobox';
 import { getBlobUrl } from '../database/db';
+import SearchField from './ui/SearchField';
 
 interface EventsViewProps {
   events: Event[];
@@ -268,17 +269,15 @@ export default function EventsView({
       {/* Directory filters line */}
       <div className="bg-white border border-[#E5E0D8] p-4 rounded-[24px] flex flex-col lg:flex-row gap-4 justify-between items-stretch lg:items-center shadow-sm">
         {/* Search */}
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-3 text-[#8C8C8C] w-4 h-4" />
-          <input 
-            id={searchInputId}
-            type="text"
-            placeholder="Search milestones, venues, custom notes..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white border border-[#E5E0D8] rounded-xl pl-9 pr-4 py-2 text-[#2D2D2D] placeholder-[#8C8C8C] focus:outline-none focus:ring-1 focus:ring-[#5A5A40] text-sm"
-          />
-        </div>
+        <SearchField
+          id={searchInputId}
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Search milestones, venues, custom notes..."
+          aria-label="Search events"
+          leadingIcon={<Search className="absolute left-3 top-3 text-[#8C8C8C] w-4 h-4 pointer-events-none" />}
+          inputClassName="w-full bg-white border border-[#E5E0D8] rounded-xl pl-9 pr-4 py-2 text-[#2D2D2D] placeholder-[#8C8C8C] focus:outline-none focus:ring-1 focus:ring-[#5A5A40] text-sm"
+        />
 
         {/* Filters */}
         <div className="flex flex-wrap md:flex-nowrap gap-2 items-center">

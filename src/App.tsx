@@ -3,7 +3,7 @@ import {
   Heart, Calendar, Users, Smartphone, Database, ShieldCheck,
   Terminal, Settings, ChevronRight, X, Plus, Trash2, HeartPulse, Shield, Star, Loader2
 } from 'lucide-react';
-import { db } from './database/db';
+import { db, checkAndRequestPersistence } from './database/db';
 import { runAllDiagnostics, type TestResult } from './tests/runner';
 import type { Person, Event, Group } from './models/types';
 
@@ -16,13 +16,14 @@ import WidgetSystemView from './components/WidgetSystemView';
 import BackupView from './components/BackupView';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'people' | 'events' | 'widgets' | 'backups' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'people' | 'events' | 'widgets' | 'backups' | 'settings' | 'more'>('dashboard');
 
   // Database data states
   const [people, setPeople] = useState<Person[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
+  const [persistenceNudge, setPersistenceNudge] = useState<string | null>(null);
 
   // Profile detail overlay navigator state
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
@@ -68,6 +69,20 @@ export default function App() {
     };
     await db.people.put(payload);
     await loadDatabaseState();
+    try {
+      if (!localStorage.getItem('important-to-me-persistence-nudge')) {
+        const stats = await checkAndRequestPersistence();
+        localStorage.setItem('important-to-me-persistence-nudge', '1');
+        setPersistenceNudge(
+          stats.granted
+            ? 'This browser will try to keep your data. Still export backups regularly.'
+            : 'Safari may clear site data when storage is low. Export backups from More → Backups.'
+        );
+        setTimeout(() => setPersistenceNudge(null), 8000);
+      }
+    } catch {
+      // ignore
+    }
   };
 
   const handleUpdatePerson = async (updatedP: Person) => {
@@ -200,6 +215,11 @@ export default function App() {
 
       {/* Main Panel Content Frame */}
       <main className="flex-1 flex flex-col min-h-0 bg-[#F5F2ED] md:p-8 p-4 pb-20 md:pb-8 overflow-y-auto">
+        {persistenceNudge && (
+          <div role="status" className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-950">
+            {persistenceNudge}
+          </div>
+        )}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3 text-[#7A7A7A]">
             <svg className="animate-spin h-8 w-8 text-[#5A5A40]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -273,6 +293,32 @@ export default function App() {
               />
             )}
 
+            
+            {activeTab === 'more' && (
+              <div className="space-y-4 max-w-lg mx-auto">
+                <div>
+                  <h2 className="text-4xl font-serif font-bold italic text-[#5A5A40] tracking-tight">More</h2>
+                  <p className="text-[#7A7A7A] text-sm">Backups and settings.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('backups')}
+                  className="w-full flex items-center justify-between rounded-[24px] border border-[#E5E0D8] bg-white p-5 shadow-sm text-left"
+                >
+                  <span className="flex items-center gap-3 font-semibold text-[#2D2D2D]"><Database className="w-5 h-5 text-[#5A5A40]" /> Backups</span>
+                  <ChevronRight className="w-4 h-4 text-[#AFAFAF]" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('settings')}
+                  className="w-full flex items-center justify-between rounded-[24px] border border-[#E5E0D8] bg-white p-5 shadow-sm text-left"
+                >
+                  <span className="flex items-center gap-3 font-semibold text-[#2D2D2D]"><Settings className="w-5 h-5 text-[#5A5A40]" /> Settings</span>
+                  <ChevronRight className="w-4 h-4 text-[#AFAFAF]" />
+                </button>
+              </div>
+            )}
+
             {activeTab === 'backups' && (
               <BackupView
                 onRefreshData={loadDatabaseState}
@@ -309,6 +355,20 @@ export default function App() {
                         className="w-10 h-8 rounded bg-transparent border-0 cursor-pointer"
                         title="Group color"
                       />
+                      <select
+                        value={newGroupIcon}
+                        onChange={(e) => setNewGroupIcon(e.target.value)}
+                        className="rounded-xl border border-[#E5E0D8] px-2 py-1.5 text-xs"
+                        title="Group icon"
+                        aria-label="Group icon"
+                      >
+                        <option value="Heart">Heart</option>
+                        <option value="Users">People</option>
+                        <option value="Briefcase">Work</option>
+                        <option value="Home">Home</option>
+                        <option value="Church">Church</option>
+                        <option value="Star">Star</option>
+                      </select>
                       <button
                         type="submit"
                         className="py-1.5 px-3 bg-[#5A5A40] hover:bg-opacity-90 text-white rounded-xl text-xs font-bold shrink-0 cursor-pointer"
@@ -325,7 +385,7 @@ export default function App() {
                           <div key={g.id} className="flex justify-between items-center bg-[#F5F2ED]/60 border border-[#E5E0D8] px-3.5 py-2 rounded-xl text-xs">
                             <div className="flex items-center gap-2">
                               <span className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: g.color }} />
-                              <span className="text-[#2D2D2D] font-semibold">{g.name}</span>
+                              <span className="text-[#2D2D2D] font-semibold">{g.name}</span><span className="text-[10px] text-[#8C8C8C]">{g.icon}</span>
                             </div>
                             <button
                               onClick={() => handleDeleteGroup(g.id)}
@@ -361,8 +421,8 @@ export default function App() {
                 <div className="bg-white border border-[#E5E0D8] rounded-[24px] p-6 space-y-4 shadow-sm">
                   <div className="flex justify-between items-center border-b border-[#E5E0D8] pb-3">
                     <div>
-                      <h3 className="text-sm font-bold uppercase tracking-wider text-[#2D2D2D]">Deterministic Diagnostic Suite</h3>
-                      <p className="text-xs text-[#7A7A7A]">Run automatic deterministic unit tests over age bounds, year-boundary leap rules, and transactions.</p>
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-[#2D2D2D]">Built-in checks</h3>
+                      <p className="text-xs text-[#7A7A7A]">Optional checks for date math (ages, leap years) and local save behavior.</p>
                     </div>
                     <button
                       onClick={handleTriggerDiagnostics}
@@ -370,7 +430,7 @@ export default function App() {
                       className="py-2 px-4 bg-[#5A5A40] hover:bg-opacity-90 text-white rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1.5"
                     >
                       {runningDiagnostics ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Terminal className="w-3.5 h-3.5" />}
-                      {runningDiagnostics ? 'Evaluating assertions...' : 'Execute Diagnostic Tests'}
+                      {runningDiagnostics ? 'Running…' : 'Run checks'}
                     </button>
                   </div>
 
@@ -404,15 +464,14 @@ export default function App() {
       {/* Tab Navigation - Mobile navbar */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-[#E5E0D8] p-2.5 flex justify-around items-center z-40" aria-label="Mobile Bottom Navigation">
         {([
-          { id: 'dashboard', label: 'Dashboard', icon: Heart },
+          { id: 'dashboard', label: 'Home', icon: Heart },
           { id: 'people', label: 'People', icon: Users },
           { id: 'events', label: 'Events', icon: Calendar },
           { id: 'widgets', label: 'Widgets', icon: Smartphone },
-          { id: 'backups', label: 'Backups', icon: Database },
-          { id: 'settings', label: 'Settings', icon: Settings }
+          { id: 'more', label: 'More', icon: Settings }
         ] as const).map(tab => {
           const Icon = tab.icon;
-          const isSelected = activeTab === tab.id && !selectedPersonId;
+          const isSelected = (activeTab === tab.id || (tab.id === 'more' && (activeTab === 'backups' || activeTab === 'settings'))) && !selectedPersonId;
           return (
             <button
               key={tab.id}

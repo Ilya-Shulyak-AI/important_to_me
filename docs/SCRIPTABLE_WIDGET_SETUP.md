@@ -1,5 +1,8 @@
 # Set Up iPhone Widgets with Scriptable
 
+> Important to Me uses **Scriptable**, not a native WidgetKit app. Native widgets would need an Apple Developer account and Xcode.
+
+
 Important to Me can show upcoming birthdays and events on your iPhone Home Screen through the free Scriptable app.
 
 ## Official Scriptable Links
@@ -111,3 +114,13 @@ Run the script inside Scriptable, read the displayed error, reimport widget data
 ## Privacy
 
 The widget export is created locally by Important to Me. It includes names, dates, relationship labels, favorites, group IDs, tags, and event labels needed for the widget. It intentionally excludes notes, photos, custom private fields, and birth locations. Scriptable stores the imported JSON locally by default in `ImportantToMe/important-to-me-widget-data.json`. Anyone with access to the unlocked phone or downloaded file may be able to read it; this is not encryption.
+
+
+## Optional: weekly Apple Shortcuts reminder
+
+1. Open the Shortcuts app on iPhone.
+2. Create a Personal Automation → Time of Day → weekly.
+3. Add a notification action: “Open Important to Me → iPhone Widgets → Copy Widget Data, then Import in Scriptable.”
+4. Optionally open `https://ilya-shulyak-ai.github.io/important_to_me/` in Safari.
+
+This does not auto-sync data; it only reminds you to refresh the export.

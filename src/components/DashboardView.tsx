@@ -6,6 +6,7 @@ import {
 import { calculateExactAge, calculateNextAnniversary } from '../date-engine/engine';
 import { getBlobUrl } from '../database/db';
 import type { Person, Event, Group } from '../models/types';
+import { buildIcsCalendar, collectUpcomingCalendarItems, downloadIcsFile } from '../features/calendar/icsExport';
 
 interface DashboardViewProps {
   people: Person[];
@@ -51,6 +52,13 @@ export default function DashboardView({
 
   // Calculate upcoming birthdays & anniversaries within range
   const now = new Date();
+
+  const downloadUpcomingIcs = () => {
+    const items = collectUpcomingCalendarItems(people, events, rangeDays);
+    const ics = buildIcsCalendar(items);
+    downloadIcsFile(`important-to-me-upcoming-${rangeDays}d.ics`, ics);
+  };
+
   
   const upcomingBirthdays = people.map(p => {
     const anniv = calculateNextAnniversary(p.dob, now);
@@ -380,6 +388,12 @@ export default function DashboardView({
               <Award className="w-4 h-4" />
             </h4>
 
+            <div className="flex flex-wrap gap-2 mb-3">
+              <button type="button" onClick={downloadUpcomingIcs} className="rounded-xl border border-[#E5E0D8] bg-white px-3 py-1.5 text-xs font-bold text-[#5A5A40]">
+                Download calendar (.ics) — next {rangeDays} days
+              </button>
+              <p className="text-[11px] text-[#7A7A7A] self-center">Import into Apple Calendar to get system reminders.</p>
+            </div>
             {upcomingBirthdays.length === 0 ? (
               <div className="p-8 border border-dashed border-[#E5E0D8]/85 rounded-2xl text-center text-[#7A7A7A] text-xs">
                 No birthdays found in the next {rangeDays} days.
