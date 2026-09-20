@@ -126,7 +126,7 @@ True native Home Screen widgets require an Apple Developer account and an Xcode 
 - iOS may delay widget refreshes.
 - Widget photos are intentionally not exported by default.
 - Important “things” (places, heirlooms, accounts) are not a first-class object type yet — use notes/custom fields or events until that lands.
-- Upcoming dates can be exported as `.ics` for Apple Calendar; the app does not send push notifications.
+- Upcoming dates show as in-app “This week” reminders on the Dashboard (no calendar export; no push notifications).
 
 ## Origin
 

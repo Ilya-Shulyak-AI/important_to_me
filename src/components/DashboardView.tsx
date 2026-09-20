@@ -6,7 +6,6 @@ import {
 import { calculateExactAge, calculateNextAnniversary } from '../date-engine/engine';
 import { getBlobUrl } from '../database/db';
 import type { Person, Event, Group } from '../models/types';
-import { buildIcsCalendar, collectUpcomingCalendarItems, downloadIcsFile } from '../features/calendar/icsExport';
 
 interface DashboardViewProps {
   people: Person[];
@@ -28,7 +27,15 @@ export default function DashboardView({
   onAddEvent
 }: DashboardViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [rangeDays, setRangeDays] = useState<7 | 30 | 90 | 365>(30);
+  const [rangeDays, setRangeDays] = useState<7 | 30 | 90 | 365>(7);
+  const [dismissedIds, setDismissedIds] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('important-to-me-dismissed-reminders');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
   const [rotationIndex, setRotationIndex] = useState(0);
 
   // Filter people and events matching universal search
@@ -52,12 +59,6 @@ export default function DashboardView({
 
   // Calculate upcoming birthdays & anniversaries within range
   const now = new Date();
-
-  const downloadUpcomingIcs = () => {
-    const items = collectUpcomingCalendarItems(people, events, rangeDays);
-    const ics = buildIcsCalendar(items);
-    downloadIcsFile(`important-to-me-upcoming-${rangeDays}d.ics`, ics);
-  };
 
   
   const upcomingBirthdays = people.map(p => {
@@ -91,6 +92,37 @@ export default function DashboardView({
       days: calculateNextAnniversary(p.dob, now).daysOnlyRemaining
     })).filter(x => x.days < 45).map(x => x.p)
   ).filter((value, index, self) => self.findIndex(y => y.id === value.id) === index); // unique
+
+
+  const thisWeekBirthdays = people.map(p => {
+    const anniv = calculateNextAnniversary(p.dob, now);
+    return { kind: 'birthday' as const, id: `bday-${p.id}-${anniv.dateStr}`, person: p, anniv, label: p.displayName };
+  }).filter(item => item.anniv.daysOnlyRemaining <= 7)
+    .sort((a, b) => a.anniv.daysOnlyRemaining - b.anniv.daysOnlyRemaining);
+
+  const thisWeekEvents = events.map(e => {
+    const anniv = calculateNextAnniversary(e.originalDate, now);
+    return { kind: 'event' as const, id: `event-${e.id}-${anniv.dateStr}`, event: e, anniv, label: e.eventName };
+  }).filter(item => item.anniv.daysOnlyRemaining <= 7)
+    .sort((a, b) => a.anniv.daysOnlyRemaining - b.anniv.daysOnlyRemaining);
+
+  const thisWeekReminders = [...thisWeekBirthdays, ...thisWeekEvents]
+    .sort((a, b) => a.anniv.daysOnlyRemaining - b.anniv.daysOnlyRemaining)
+    .filter((item) => !dismissedIds.includes(item.id));
+
+  const dismissReminder = (id: string) => {
+    setDismissedIds((prev) => {
+      const next = [...prev, id];
+      localStorage.setItem('important-to-me-dismissed-reminders', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const clearDismissed = () => {
+    setDismissedIds([]);
+    localStorage.removeItem('important-to-me-dismissed-reminders');
+  };
+
 
   // Auto-rotate every 15 seconds
   useEffect(() => {
@@ -168,6 +200,65 @@ export default function DashboardView({
             <div className="text-[10px] font-bold text-[#8C8C8C] uppercase tracking-wider">Today's Dates</div>
           </div>
         </div>
+      </div>
+
+      {/* In-app This week reminders */}
+      <div className="bg-white border border-[#E5E0D8] rounded-3xl p-6 space-y-4 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-bold text-[#2D2D2D] flex items-center gap-2">
+              <Clock className="w-5 h-5 text-[#8C6A5D]" />
+              This week
+            </h3>
+            <p className="text-xs text-[#7A7A7A]">In-app reminders for the next 7 days. Nothing is sent to your calendar.</p>
+          </div>
+          {dismissedIds.length > 0 && (
+            <button type="button" onClick={clearDismissed} className="text-xs font-bold text-[#5A5A40] underline">
+              Show dismissed
+            </button>
+          )}
+        </div>
+        {thisWeekReminders.length === 0 ? (
+          <div className="p-6 border border-dashed border-[#E5E0D8] rounded-2xl text-center text-xs text-[#7A7A7A]">
+            Nothing coming up in the next 7 days{dismissedIds.length ? ' (or you dismissed the current reminders)' : ''}.
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {thisWeekReminders.map((item) => (
+              <li
+                key={item.id}
+                className="flex items-center justify-between gap-3 p-3.5 rounded-2xl border border-[#E5E0D8] bg-[#F5F2ED]/50"
+              >
+                <button
+                  type="button"
+                  className="flex-1 text-left min-w-0"
+                  onClick={() => {
+                    if (item.kind === 'birthday') onNavigateToPerson(item.person.id);
+                    else onNavigateToEvent(item.event.id);
+                  }}
+                >
+                  <div className="text-sm font-semibold text-[#2D2D2D] truncate">{item.label}</div>
+                  <div className="text-[11px] text-[#7A7A7A]">
+                    {item.kind === 'birthday' ? 'Birthday' : 'Event'} · {item.anniv.dayOfWeek}
+                    {item.anniv.daysOnlyRemaining === 0 ? ' · Today' : ` · in ${item.anniv.daysOnlyRemaining} day${item.anniv.daysOnlyRemaining === 1 ? '' : 's'}`}
+                  </div>
+                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`text-xs font-bold px-2 py-1 rounded-full ${item.anniv.daysOnlyRemaining === 0 ? 'bg-[#8C6A5D]/15 text-[#8C6A5D]' : 'bg-[#5A5A40]/10 text-[#5A5A40]'}`}>
+                    {item.anniv.daysOnlyRemaining === 0 ? 'Today' : `${item.anniv.daysOnlyRemaining}d`}
+                  </span>
+                  <button
+                    type="button"
+                    className="text-[11px] font-bold text-[#7A7A7A] hover:text-[#2D2D2D]"
+                    onClick={() => dismissReminder(item.id)}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Smart Rotation Card & Fast Search */}
@@ -358,9 +449,9 @@ export default function DashboardView({
           <div>
             <h3 className="text-lg font-bold text-[#2D2D2D] flex items-center gap-2">
               <Clock className="w-5 h-5 text-[#8C6A5D]" />
-              Upcoming Anniversaries & Birthdays
+              Upcoming (in-app)
             </h3>
-            <p className="text-xs text-[#7A7A7A]">Calendar countdowns within your selected time interval.</p>
+            <p className="text-xs text-[#7A7A7A]">Browse further out if you want — This week above is the daily reminder list.</p>
           </div>
 
           <div className="flex bg-[#F5F2ED] p-1 rounded-xl border border-[#E5E0D8] self-start">
@@ -374,7 +465,7 @@ export default function DashboardView({
                     : 'text-[#7A7A7A] hover:bg-[#E5E0D8]/40'
                 }`}
               >
-                {d === 365 ? '1 Year' : `${d} Days`}
+                {d === 7 ? 'This week' : d === 365 ? '1 Year' : `${d} Days`}
               </button>
             ))}
           </div>
@@ -388,12 +479,6 @@ export default function DashboardView({
               <Award className="w-4 h-4" />
             </h4>
 
-            <div className="flex flex-wrap gap-2 mb-3">
-              <button type="button" onClick={downloadUpcomingIcs} className="rounded-xl border border-[#E5E0D8] bg-white px-3 py-1.5 text-xs font-bold text-[#5A5A40]">
-                Download calendar (.ics) — next {rangeDays} days
-              </button>
-              <p className="text-[11px] text-[#7A7A7A] self-center">Import into Apple Calendar to get system reminders.</p>
-            </div>
             {upcomingBirthdays.length === 0 ? (
               <div className="p-8 border border-dashed border-[#E5E0D8]/85 rounded-2xl text-center text-[#7A7A7A] text-xs">
                 No birthdays found in the next {rangeDays} days.
